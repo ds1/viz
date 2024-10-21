@@ -13,10 +13,9 @@ class DataProcessor(QObject):
     def process_data(self, new_data):
         # Roll the buffer and add new data
         self.data_buffer = np.roll(self.data_buffer, -1, axis=1)
-        self.data_buffer[:, -1] = new_data
+        self.data_buffer[:, -1] = new_data[:self.num_channels]  # Ensure we only take up to num_channels
 
         # Here you can add more processing steps as needed
         # For example, filtering, artifact rejection, etc.
 
-        print(f"Processed data shape: {self.data_buffer.shape}")  # Debug print
         self.processed_data.emit(self.data_buffer)
