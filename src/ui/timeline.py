@@ -4,17 +4,21 @@ from PyQt5.QtCore import Qt
 class Timeline(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.layout = QHBoxLayout(self)
-        self.layout.setAlignment(Qt.AlignLeft)
+        layout = QHBoxLayout(self)
+        layout.setSpacing(0)
+        layout.setContentsMargins(0, 0, 0, 0)
 
-        self.time_label = QLabel("-4.000 s")
-        self.layout.addWidget(self.time_label)
+        times = ["-4.000 s", "-3.000 s", "-2.000 s", "-1.000 s", "0"]
+        for time in times:
+            label = QLabel(time)
+            label.setStyleSheet("color: #AAAAAA; font-size: 10px;")
+            label.setAlignment(Qt.AlignLeft | Qt.AlignBottom)
+            layout.addWidget(label)
+            if time != "0":
+                layout.addStretch(1)
 
-        self.window_selector = QComboBox()
-        self.window_selector.addItems(["2 seconds", "4 seconds", "8 seconds"])
-        self.window_selector.setCurrentIndex(1)  # Default to 4 seconds
-        self.window_selector.currentIndexChanged.connect(self.window_changed)
-        self.layout.addWidget(self.window_selector)
+        self.setFixedHeight(30)
+        self.setStyleSheet("background-color: #1E1E1E;")
 
     def update_time(self, time):
         self.time_label.setText(f"{time:.3f} s")
