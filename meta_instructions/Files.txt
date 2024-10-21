@@ -1,0 +1,10 @@
+# Files
+
+Original proof of concept prototype: vispyqt_visualizer_helperFuncs_v25.py (and vispyqt_visualizer_helperFuncs_v25.py)
+
+Interface mockup of this app we are aiming to build in this iteration: Petal_Viz_1.0_Mockup.png
+
+Reference for future iterations of the app (out of scope for this project): Petal_Viz_Future_Mockup.png
+
+.gitignore
+
