@@ -12,8 +12,9 @@ from PyQt5.QtCore import Qt, QThread, QByteArray
 from src.ui.visualizer import Visualizer
 from src.ui.timeline import Timeline
 from src.ui.status_bar import StatusBar
+from src.ui.svg_icons import IconManager
 from src.data.lsl_receiver import LSLReceiver
-from src.data.data_processor import DataProcessor
+from src.data.data_processor import DataProcessor, DataProcessorThread
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -34,20 +35,6 @@ class MainWindow(QMainWindow):
         self.setup_menu()
         self.setup_ui()
         self.setup_data_processing()
-
-    @staticmethod
-    def create_svg_icon(icon_name, color):
-        svg_content = {
-            "menu_down": f'<path fill="{color}" d="M7,10L12,15L17,10H7Z" />',
-            # Add other icons here as needed, for example:
-            # "battery": f'<path fill="{color}" d="M16,20H8V6H16M16.67,4H15V2H9V4H7.33A1.33,1.33 0 0,0 6,5.33V20.67C6,21.4 6.6,22 7.33,22H16.67A1.33,1.33 0 0,0 18,20.67V5.33C18,4.6 17.4,4 16.67,4Z" />',
-            # "bluetooth": f'<path fill="{color}" d="M14.88,16.29L13,18.17V14.41M13,5.83L14.88,7.71L13,9.58M17.71,7.71L12,2H11V9.58L6.41,5L5,6.41L10.59,12L5,17.58L6.41,19L11,14.41V22H12L17.71,16.29L13.41,12L17.71,7.71Z" />',
-        }
-        return f"""
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-            {svg_content.get(icon_name, '')}
-        </svg>
-        """
 
     def setup_ui(self):
         controls_layout = QHBoxLayout()
@@ -79,14 +66,12 @@ class MainWindow(QMainWindow):
             """)
             
             # Create SVG widget for dropdown arrow
-            svg_content = self.create_svg_icon("menu_down", "#C58BFF")
-            svg_widget = QSvgWidget()
-            svg_widget.load(QByteArray(svg_content.encode('utf-8')))
-            svg_widget.setFixedSize(20, 20)
+            menu_down_icon = IconManager.get_icon(f"{control}_menu_down")
+            IconManager.update_icon(f"{control}_menu_down", "menu_down", "#C58BFF")
             
             dropdown_layout = QHBoxLayout()
             dropdown_layout.addWidget(dropdown)
-            dropdown_layout.addWidget(svg_widget)
+            dropdown_layout.addWidget(menu_down_icon)
             dropdown_layout.setSpacing(0)
             dropdown_layout.setContentsMargins(0, 0, 0, 0)
             
@@ -102,20 +87,6 @@ class MainWindow(QMainWindow):
         # Timeline
         self.timeline = Timeline()
         self.main_layout.addWidget(self.timeline)
-
-        # Pause button
-        pause_button = QPushButton("II")
-        pause_button.setStyleSheet("""
-            QPushButton {
-                background-color: #8E44AD;
-                color: white;
-                border-radius: 15px;
-                padding: 5px;
-                font-weight: bold;
-            }
-        """)
-        pause_button.setFixedSize(30, 30)
-        self.main_layout.addWidget(pause_button, alignment=Qt.AlignLeft)
 
         # Status bar
         self.status_bar = StatusBar()
@@ -148,26 +119,32 @@ class MainWindow(QMainWindow):
     def setup_data_processing(self):
         # Set up LSL receiver and data processor
         self.lsl_receiver = LSLReceiver()
-        self.data_processor = DataProcessor()
-
-        # Set up receiver thread
+        self.data_processor = DataProcessor(lsl_receiver=self.lsl_receiver)
+        
+        # Set up LSL receiver thread
         self.receiver_thread = QThread()
         self.lsl_receiver.moveToThread(self.receiver_thread)
         self.receiver_thread.started.connect(self.lsl_receiver.connect_to_stream)
-
-        # Connect signals
-        self.lsl_receiver.data_received.connect(self.data_processor.process_data)
-        self.data_processor.processed_data.connect(self.visualizer.update_data)
+        
+        # Set up data processor thread
+        self.data_processor_thread = DataProcessorThread(self.data_processor)
+        self.data_processor_thread.processed_data.connect(self.visualizer.update_data)
+        
+        # Connect status signals
         self.lsl_receiver.connection_changed.connect(self.update_connection_status)
-
-        # Start receiver thread
+        
+        # Start threads
         self.receiver_thread.start()
+        self.data_processor_thread.start()
 
     def update_connection_status(self, is_connected):
         status = "Connected" if is_connected else "Disconnected"
         self.status_bar.update_stream_status(status)
 
     def closeEvent(self, event):
+        # Clean shutdown of threads
+        self.data_processor_thread.stop()
+        self.data_processor_thread.wait()
         self.lsl_receiver.disconnect()
         self.receiver_thread.quit()
         self.receiver_thread.wait()

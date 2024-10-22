@@ -11,6 +11,7 @@ class LSLReceiver(QObject):
         self.inlet = None
         self.is_connected = False
         self.thread = None
+        self.latest_sample = None
 
     def connect_to_stream(self):
         print("Looking for an EEG stream...")
@@ -35,10 +36,13 @@ class LSLReceiver(QObject):
         while self.is_connected:
             sample, timestamp = self.inlet.pull_sample(timeout=1.0)
             if sample is not None:
-                print(f"Received sample: {sample}")  # Debug print
-                self.data_received.emit(np.array(sample))
+                self.latest_sample = np.array(sample)
+                self.data_received.emit(self.latest_sample)
             else:
                 print("No sample received")  # Debug print
+
+    def get_data(self):
+        return self.latest_sample
 
     def disconnect(self):
         self.is_connected = False
