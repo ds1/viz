@@ -10,7 +10,6 @@ from PyQt5.QtGui import QIcon, QFont
 from PyQt5.QtSvg import QSvgWidget
 from PyQt5.QtCore import Qt, QThread, QByteArray
 from src.ui.visualizer import Visualizer
-from src.ui.timeline import Timeline
 from src.ui.status_bar import StatusBar
 from src.ui.svg_icons import IconManager
 from src.data.lsl_receiver import LSLReceiver
@@ -84,10 +83,6 @@ class MainWindow(QMainWindow):
         self.visualizer = Visualizer()
         self.main_layout.addWidget(self.visualizer)
 
-        # Timeline
-        self.timeline = Timeline()
-        self.main_layout.addWidget(self.timeline)
-
         # Status bar
         self.status_bar = StatusBar()
         self.setStatusBar(self.status_bar)
@@ -96,8 +91,6 @@ class MainWindow(QMainWindow):
 
         # View menu
         view_menu = self.menuBar().addMenu("View")
-        view_menu.addAction(self.create_action("Zoom In", self.zoom_in))
-        view_menu.addAction(self.create_action("Zoom Out", self.zoom_out))
         view_menu.addAction(self.create_action("Monochrome", self.set_monochrome))
         view_menu.addAction(self.create_action("Multicolor", self.set_multicolor))
 
@@ -149,12 +142,6 @@ class MainWindow(QMainWindow):
         self.receiver_thread.quit()
         self.receiver_thread.wait()
         super().closeEvent(event)
-
-    def zoom_in(self):
-        self.visualizer.zoom_in()
-
-    def zoom_out(self):
-        self.visualizer.zoom_out()
 
     def set_monochrome(self):
         self.visualizer.set_color_mode('monochrome')
