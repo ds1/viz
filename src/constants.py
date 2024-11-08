@@ -2,14 +2,19 @@ from enum import Enum
 from typing import Dict, List, Tuple
 from dataclasses import dataclass
 
-from .custom_types import ChannelConfig
-
 class DataType(Enum):
-    """Supported data stream types"""
     EEG = "EEG"
     PPG = "PPG"
     ACCELEROMETER = "ACCEL"
     GYROSCOPE = "GYRO"
+
+    @classmethod
+    def from_string(cls, value: str) -> 'DataType':
+        """Safely convert string to DataType"""
+        try:
+            return next(dt for dt in cls if dt.value == value)
+        except StopIteration:
+            raise ValueError(f"Invalid DataType value: {value}")
 
 class StreamStatus(Enum):
     """LSL stream connection states"""
@@ -20,7 +25,7 @@ class StreamStatus(Enum):
     RECONNECTING = "Reconnecting"
 
 @dataclass
-class ChannelConfig:
+class StreamChannelConfig:  # Renamed from ChannelConfig to avoid conflict
     """Channel configuration"""
     name: str
     unit: str
@@ -39,27 +44,27 @@ class StreamConfig:
     }
     
     # Channel configurations
-    CHANNELS: Dict[DataType, Dict[str, ChannelConfig]] = {
+    CHANNELS: Dict[DataType, Dict[str, StreamChannelConfig]] = {
         DataType.EEG: {
-            'TP9': ChannelConfig('Left Ear', 'µV', (-500, 500), '#4CAF50'),
-            'FP1': ChannelConfig('Left Forehead', 'µV', (-500, 500), '#2196F3'),
-            'FP2': ChannelConfig('Right Forehead', 'µV', (-500, 500), '#F44336'),
-            'TP10': ChannelConfig('Right Ear', 'µV', (-500, 500), '#FFC107')
+            'TP9': StreamChannelConfig('Left Ear', 'µV', (-500, 500), '#4CAF50'),
+            'FP1': StreamChannelConfig('Left Forehead', 'µV', (-500, 500), '#2196F3'),
+            'FP2': StreamChannelConfig('Right Forehead', 'µV', (-500, 500), '#F44336'),
+            'TP10': StreamChannelConfig('Right Ear', 'µV', (-500, 500), '#FFC107')
         },
         DataType.PPG: {
-            'Ambient': ChannelConfig('Ambient', 'units', (0, 4096), '#9C27B0'),
-            'IR': ChannelConfig('IR', 'units', (0, 4096), '#E91E63'),
-            'Red': ChannelConfig('Red', 'units', (0, 4096), '#FF5722')
+            'Ambient': StreamChannelConfig('Ambient', 'units', (0, 4096), '#9C27B0'),
+            'IR': StreamChannelConfig('IR', 'units', (0, 4096), '#E91E63'),
+            'Red': StreamChannelConfig('Red', 'units', (0, 4096), '#FF5722')
         },
         DataType.ACCELEROMETER: {
-            'X': ChannelConfig('X-Axis', 'g', (-2, 2), '#2196F3'),
-            'Y': ChannelConfig('Y-Axis', 'g', (-2, 2), '#4CAF50'),
-            'Z': ChannelConfig('Z-Axis', 'g', (-2, 2), '#FFC107')
+            'X': StreamChannelConfig('X-Axis', 'g', (-2, 2), '#2196F3'),
+            'Y': StreamChannelConfig('Y-Axis', 'g', (-2, 2), '#4CAF50'),
+            'Z': StreamChannelConfig('Z-Axis', 'g', (-2, 2), '#FFC107')
         },
         DataType.GYROSCOPE: {
-            'X': ChannelConfig('X-Axis', '°/s', (-250, 250), '#2196F3'),
-            'Y': ChannelConfig('Y-Axis', '°/s', (-250, 250), '#4CAF50'),
-            'Z': ChannelConfig('Z-Axis', '°/s', (-250, 250), '#FFC107')
+            'X': StreamChannelConfig('X-Axis', '°/s', (-250, 250), '#2196F3'),
+            'Y': StreamChannelConfig('Y-Axis', '°/s', (-250, 250), '#4CAF50'),
+            'Z': StreamChannelConfig('Z-Axis', '°/s', (-250, 250), '#FFC107')
         }
     }
 

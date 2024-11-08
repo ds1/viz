@@ -1,4 +1,4 @@
-from PyQt5.QtCore import QObject, QMutex, pyqtSignal
+from PyQt5.QtCore import QObject, QThread, QMutex, pyqtSignal
 import numpy as np
 from typing import Optional, Dict, Any, Tuple
 from collections import deque
@@ -83,17 +83,15 @@ class CircularBuffer:
 class DataProcessor(QObject):
     """Processes real-time data streams with signal quality monitoring"""
     
-    # Signals
-    processed_data = pyqtSignal(ProcessedData)
-    error_occurred = pyqtSignal(str)
+    processed_data = pyqtSignal(object)  # for processed data
+    error_occurred = pyqtSignal(str)     # for error message
     
     def __init__(self, data_type: DataType):
         super().__init__()
-        
-        # Configuration
-        self.data_type = data_type
+        self.data_type = data_type  # Store as enum
         self.sampling_rate = StreamConfig.SAMPLING_RATES[data_type]
         self.channels = StreamConfig.CHANNELS[data_type]
+        
         self.n_channels = len(self.channels)
         
         # State
@@ -276,3 +274,38 @@ class DataProcessor(QObject):
             
         if hasattr(self, 'hr_buffer'):
             self.hr_buffer.clear()
+
+class DataProcessorThread(QThread):
+    """Thread for running data processing"""
+    
+    # Signals
+    processed_data = pyqtSignal(object)  # For processed data
+    error_occurred = pyqtSignal(str)
+    
+    def __init__(self, processor, parent=None):
+        super().__init__(parent)
+        self.processor = processor
+        self.running = False
+        
+    def run(self):
+        """Thread's main loop"""
+        self.running = True
+        while self.running:
+            try:
+                # Process data if available
+                if hasattr(self.processor, 'process_data'):
+                    result = self.processor.process_data()
+                    if result is not None:
+                        self.processed_data.emit(result)
+                
+                # Sleep briefly to prevent CPU overuse
+                self.msleep(10)
+                
+            except Exception as e:
+                logging.error(f"Processing error: {str(e)}")
+                self.error_occurred.emit(str(e))
+                
+    def stop(self):
+        """Stop the processing thread"""
+        self.running = False
+        self.wait()

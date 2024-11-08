@@ -5,6 +5,7 @@ from PyQt5.QtGui import QFont, QIcon
 
 from ..ui.visualizer import Visualizer
 from ..ui.status_bar import StatusBar
+from src.ui.timeline import Timeline
 from ..ui.design_system import DesignSystem
 from ..data.lsl_receiver import LSLReceiver, StreamStatus
 from ..data.data_processor import DataProcessor, DataProcessorThread
@@ -13,8 +14,8 @@ from ..constants import DataType, DisplayConfig, ProcessingConfig
 class ControlBar(QWidget):
     """Control bar with data type, filter, scale, and window controls"""
     
-    # Signals for control changes
-    data_type_changed = pyqtSignal(DataType)
+    # Signals use simple types
+    data_type_changed = pyqtSignal(str)
     filter_changed = pyqtSignal(str)
     scale_changed = pyqtSignal(float)
     window_changed = pyqtSignal(float)
@@ -37,15 +38,14 @@ class ControlBar(QWidget):
         self.setupControls()
         
     def setupControls(self):
-        """Create and configure control dropdowns"""
         controls = [
             ("Data", {
                 "items": [dt.value for dt in DataType],
                 "signal": self.data_type_changed,
-                "transform": lambda x: DataType(x)
+                "transform": lambda x: x  # Pass string directly
             }),
             ("Filter", {
-                "items": ProcessingConfig.FILTER_NAMES,
+                "items": ProcessingConfig.FILTER_NAMES[DataType.EEG],
                 "signal": self.filter_changed,
                 "transform": lambda x: x
             }),
@@ -92,16 +92,21 @@ class ControlBar(QWidget):
 class MainWindow(QMainWindow):
     """Main application window with integrated design system"""
     
-    def __init__(self):
+    def __init__(self, data_processor=None, lsl_receiver=None):
         super().__init__()
         self.setWindowTitle("Petal Viz 1.0")
         self.resize(1200, 800)
+        
+        # Store dependencies
+        self.data_processor = data_processor
+        self.lsl_receiver = lsl_receiver
+        self.current_data_type = DataType.EEG
+        self.monochrome_mode = False
         
         # Set up UI
         self.setupWindow()
         self.setupMenuBar()
         self.setupCentralWidget()
-        self.setupDataProcessing()
         
         # Initialize state
         self.current_data_type = DataType.EEG
@@ -194,31 +199,43 @@ class MainWindow(QMainWindow):
         self.connectControls()
         
     def setupDataProcessing(self):
-        """Initialize data processing pipeline"""
-        # Create LSL receiver
-        self.lsl_receiver = LSLReceiver()
-        self.lsl_receiver.connection_changed.connect(self.updateConnectionStatus)
-        self.lsl_receiver.error_occurred.connect(self.status_bar.showError)
+        """Initialize data processing pipeline - only if dependencies not provided"""
+        if self.lsl_receiver is None:
+            self.lsl_receiver = LSLReceiver()
+            self.lsl_receiver.connection_changed.connect(self.updateConnectionStatus)
+            self.lsl_receiver.error_occurred.connect(self.status_bar.showError)
         
-        # Create data processor
-        self.data_processor = DataProcessor(self.current_data_type)
-        
-        # Create processor thread
-        self.processor_thread = DataProcessorThread(self.data_processor)
-        self.processor_thread.processed_data.connect(self.visualizer.updateData)
-        self.processor_thread.processed_data.connect(self.updateQualityMetrics)
-        
-        # Start processing
-        self.lsl_receiver.connect_to_stream()
-        self.processor_thread.start()
+        if self.data_processor is None:
+            self.data_processor = DataProcessor(self.current_data_type)
+            self.processor_thread = DataProcessorThread(self.data_processor)
+            self.processor_thread.processed_data.connect(self.visualizer.updateData)
+            self.processor_thread.processed_data.connect(self.updateQualityMetrics)
+            
+            self.lsl_receiver.connect_to_stream()
+            self.processor_thread.start()
         
     def connectControls(self):
-        """Connect control signals to handlers"""
-        # Control bar signals
-        self.control_bar.data_type_changed.connect(self.changeDataType)
-        self.control_bar.filter_changed.connect(self.data_processor.set_filter)
-        self.control_bar.scale_changed.connect(self.visualizer.scale_changed)
-        self.control_bar.window_changed.connect(self.visualizer.setTimeWindow)
+        """Connect control signals"""
+        # Data processor connections
+        if self.data_processor:
+            self.control_bar.filter_changed.connect(self.data_processor.set_filter)
+            
+        # LSL receiver connections
+        if self.lsl_receiver:
+            self.lsl_receiver.status_changed.connect(
+                self.status_bar.updateStreamStatus
+            )
+            self.lsl_receiver.error_occurred.connect(
+                self.status_bar.showError  # Changed from show_error to showError
+            )
+        
+        # UI connections that don't depend on external components
+        self.control_bar.scale_changed.connect(
+            self.visualizer.set_scale
+        )
+        self.control_bar.window_changed.connect(
+            self.visualizer.set_time_window
+        )
         
         # Visualizer signals
         self.visualizer.scale_changed.connect(self.updateScaleDisplay)

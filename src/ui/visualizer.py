@@ -6,9 +6,9 @@ import pyqtgraph as pg
 import numpy as np
 from typing import List, Dict, Optional, Tuple
 
-from ..ui.design_system import DesignSystem
-from ..constants import ProcessingConfig, DisplayConfig
-from ..data.utils import calculate_signal_quality
+from src.ui.design_system import DesignSystem
+from src.constants import ProcessingConfig, DisplayConfig, DataType, StreamConfig, StreamChannelConfig
+from src.data.utils import SignalQualityMetrics
 
 class PlotContainer(QFrame):
     """Container widget for plots with consistent styling and grid overlay"""
@@ -40,13 +40,13 @@ class PlotContainer(QFrame):
 class ChannelPlot(pg.PlotWidget):
     """Enhanced plot widget for individual channels"""
     
-    def __init__(self, channel_name: str, y_range: tuple, parent=None):
+    def __init__(self, channel_name: str, channel_config: StreamChannelConfig, parent=None):
         super().__init__(parent)
         
         # Configuration
         self.channel_name = channel_name
-        self.initial_y_range = y_range
-        self.current_y_range = y_range
+        self.initial_y_range = channel_config.range  # This is now a tuple
+        self.current_y_range = channel_config.range
         
         # Setup appearance
         self.setupPlot()
@@ -62,7 +62,7 @@ class ChannelPlot(pg.PlotWidget):
         # Configure view box
         view = self.getViewBox()
         view.setBackgroundColor('transparent')
-        view.setYRange(*self.initial_y_range, padding=0)
+        view.setYRange(self.initial_y_range[0], self.initial_y_range[1], padding=0)
         view.setMouseEnabled(x=False, y=False)
         
         # Create plot line with antialiasing
@@ -129,10 +129,10 @@ class Visualizer(QWidget):
     """Main visualization widget with enhanced UX and visual design"""
     
     # Signals
-    scale_changed = pyqtSignal(float)  # Emitted when vertical scale changes
-    quality_updated = pyqtSignal(Dict[str, float])  # Emitted when signal quality changes
+    scale_changed = pyqtSignal(float)
+    quality_updated = pyqtSignal(object)
     
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, data_type: DataType = DataType.EEG):
         super().__init__(parent)
         
         # Configure widget
@@ -144,7 +144,8 @@ class Visualizer(QWidget):
         )
         
         # Initialize state
-        self.channels = DisplayConfig.CHANNELS
+        self.data_type = data_type
+        self.channels = StreamConfig.CHANNELS[data_type]
         self.data_buffer = None
         self.time_data = None
         self.scale_factor = 1.0
@@ -159,7 +160,7 @@ class Visualizer(QWidget):
         self.update_timer = QTimer()
         self.update_timer.timeout.connect(self.updatePlots)
         self.update_timer.start(DisplayConfig.MINIMUM_REFRESH_INTERVAL)
-        
+
     def setupUi(self):
         """Create and configure UI layout"""
         # Main layout
@@ -168,7 +169,7 @@ class Visualizer(QWidget):
         self.layout.setContentsMargins(0, 0, 0, 0)
         
         # Plot container
-        self.plot_container = PlotContainer()
+        self.plot_container = PlotContainer()  # Removed data_type parameter
         self.layout.addWidget(self.plot_container)
         
         # Channel layout
@@ -183,7 +184,7 @@ class Visualizer(QWidget):
         """Create and configure plot widgets"""
         self.plots: List[ChannelPlot] = []
         
-        for channel_name, y_range in self.channels.items():
+        for channel_name, channel_config in self.channels.items():
             # Create row with label and plot
             row = QHBoxLayout()
             row.setSpacing(DesignSystem.SPACING.md)
@@ -195,8 +196,8 @@ class Visualizer(QWidget):
             label.setStyleSheet(self.getChannelLabelStyle(channel_name))
             row.addWidget(label)
             
-            # Channel plot
-            plot = ChannelPlot(channel_name, y_range)
+            # Channel plot - pass the entire channel_config
+            plot = ChannelPlot(channel_name, channel_config)
             plot.setFixedHeight(DesignSystem.PLOT_CONFIG['channel_height'])
             self.plots.append(plot)
             row.addWidget(plot)
@@ -204,10 +205,11 @@ class Visualizer(QWidget):
             self.channel_layout.addLayout(row)
             
     def createPauseButton(self):
-        """Create and style pause button"""
+        """Create and style pause button with fixed icons"""
         button_layout = QHBoxLayout()
         
         self.pause_button = QPushButton()
+        # Use icons from DesignSystem
         self.pause_button.setIcon(DesignSystem.ICONS.pause)
         self.pause_button.setIconSize(QSize(20, 20))
         self.pause_button.setFixedSize(30, 30)
@@ -233,9 +235,13 @@ class Visualizer(QWidget):
                     new_data.shape[1]
                 )
                 
-            # Calculate and emit signal quality metrics
+            # Calculate and emit signal quality metrics (fixed calculation)
             quality_metrics = {
-                channel: calculate_signal_quality(data, ProcessingConfig.SAMPLING_RATE)
+                channel: SignalQualityMetrics.calculate_signal_quality(
+                    data, 
+                    ProcessingConfig.SAMPLING_RATES[self.data_type],
+                    self.data_type
+                ).overall_quality
                 for channel, data in zip(self.channels.keys(), new_data)
             }
             self.quality_updated.emit(quality_metrics)

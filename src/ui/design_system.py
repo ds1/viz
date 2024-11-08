@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import Dict, Tuple
 from enum import Enum
+from PyQt5.QtGui import QIcon
+import os
 
 @dataclass
 class Typography:
@@ -33,9 +35,17 @@ class ColorTheme:
     channels: Dict[str, str] = None
     status: Dict[str, str] = None
 
+class Icons:
+    """Icon definitions"""
+    def __init__(self):
+        self.pause = QIcon("src/resources/icons/pause.svg")
+        self.play = QIcon("src/resources/icons/play.svg")
+
 class DesignSystem:
     """Central design system configuration"""
     
+    ICONS = Icons()
+
     # Typography definitions
     TYPOGRAPHY = {
         'heading': Typography(

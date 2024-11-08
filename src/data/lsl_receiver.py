@@ -1,7 +1,7 @@
 from pylsl import StreamInlet, resolve_stream, local_clock, TimeoutError
 from PyQt5.QtCore import QObject, QTimer, pyqtSignal
 import numpy as np
-from typing import Optional, List, Dict, Tuple
+from typing import Optional, List, Dict, Tuple, Union
 from dataclasses import dataclass
 import logging
 from threading import Lock
@@ -82,26 +82,22 @@ class StreamBuffer:
 class LSLReceiver(QObject):
     """Robust LSL stream receiver with automatic reconnection"""
     
-    # Signals
-    data_ready = pyqtSignal(np.ndarray, np.ndarray)  # samples, timestamps
-    status_changed = pyqtSignal(StreamStatus)
-    stream_info_updated = pyqtSignal(StreamInfo)
-    error_occurred = pyqtSignal(str)
-    quality_updated = pyqtSignal(Dict[str, float])
+    # Signals use simple types or object
+    data_ready = pyqtSignal(object, object)  # for numpy arrays
+    status_changed = pyqtSignal(str)         # for status string
+    stream_info_updated = pyqtSignal(object) # for stream info
+    error_occurred = pyqtSignal(str)         # for error message
+    quality_updated = pyqtSignal(object)     # for quality dict
     
-    def __init__(
-        self,
-        stream_type: DataType = DataType.EEG,
-        buffer_size: Optional[int] = None,
-        auto_reconnect: bool = True
-    ):
+    def __init__(self, stream_type: str, buffer_size: Optional[int] = None,
+                 auto_reconnect: bool = True):
         super().__init__()
-        
-        # Configuration
-        self.stream_type = stream_type
-        self.required_channels = len(StreamConfig.CHANNELS[stream_type])
-        self.sampling_rate = StreamConfig.SAMPLING_RATES[stream_type]
-        self.buffer_size = buffer_size or ProcessingConfig.BUFFER_SIZES[stream_type]
+        self.stream_type = stream_type  # Store as string
+        # Convert to enum for config lookups
+        data_type = DataType(stream_type)
+        self.required_channels = len(StreamConfig.CHANNELS[data_type])
+        self.sampling_rate = StreamConfig.SAMPLING_RATES[data_type]
+        self.buffer_size = buffer_size or ProcessingConfig.BUFFER_SIZES[data_type]
         self.auto_reconnect = auto_reconnect
         
         # State
@@ -127,7 +123,16 @@ class LSLReceiver(QObject):
         
         # Initialize timers
         self.setup_timers()
-        
+    
+    def set_stream_type(self, stream_type: Union[str, DataType]):
+        """Update stream type"""
+        if isinstance(stream_type, DataType):
+            self.stream_type = stream_type.value
+            self.data_type = stream_type
+        else:
+            self.stream_type = stream_type
+            self.data_type = DataType(stream_type)
+
     def setup_timers(self) -> None:
         """Initialize monitoring timers"""
         # Timer for checking stream health
@@ -150,7 +155,7 @@ class LSLReceiver(QObject):
         
         try:
             # Find streams matching type
-            streams = resolve_stream('type', self.stream_type.value, timeout=1.0)
+            streams = resolve_stream('type', self.stream_type, timeout=1.0)  # Uses the string value
             
             if not streams:
                 msg = ErrorMessages.STREAM_NOT_FOUND.format(
