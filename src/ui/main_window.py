@@ -1,167 +1,269 @@
-import os
-import sys
+from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
+                           QLabel, QComboBox, QPushButton, QAction, QStatusBar)
+from PyQt5.QtCore import Qt, QSize, pyqtSignal
+from PyQt5.QtGui import QFont, QIcon
 
-# Add the project root directory to Python path
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-sys.path.insert(0, project_root)
+from ..ui.visualizer import Visualizer
+from ..ui.status_bar import StatusBar
+from ..ui.design_system import DesignSystem
+from ..data.lsl_receiver import LSLReceiver, StreamStatus
+from ..data.data_processor import DataProcessor, DataProcessorThread
+from ..constants import DataType, DisplayConfig, ProcessingConfig
 
-from PyQt5.QtWidgets import QMainWindow, QVBoxLayout, QHBoxLayout, QWidget, QLabel, QComboBox, QPushButton, QAction
-from PyQt5.QtGui import QIcon, QFont
-from PyQt5.QtSvg import QSvgWidget
-from PyQt5.QtCore import Qt, QThread, QByteArray
-from src.ui.visualizer import Visualizer
-from src.ui.status_bar import StatusBar
-from src.ui.svg_icons import IconManager
-from src.data.lsl_receiver import LSLReceiver
-from src.data.data_processor import DataProcessor, DataProcessorThread
+class ControlBar(QWidget):
+    """Control bar with data type, filter, scale, and window controls"""
+    
+    # Signals for control changes
+    data_type_changed = pyqtSignal(DataType)
+    filter_changed = pyqtSignal(str)
+    scale_changed = pyqtSignal(float)
+    window_changed = pyqtSignal(float)
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("ControlBar")
+        
+        # Create main layout
+        self.layout = QHBoxLayout(self)
+        self.layout.setSpacing(DesignSystem.SPACING.lg)
+        self.layout.setContentsMargins(
+            DesignSystem.SPACING.lg,
+            DesignSystem.SPACING.md,
+            DesignSystem.SPACING.lg,
+            DesignSystem.SPACING.md
+        )
+        
+        # Create controls
+        self.setupControls()
+        
+    def setupControls(self):
+        """Create and configure control dropdowns"""
+        controls = [
+            ("Data", {
+                "items": [dt.value for dt in DataType],
+                "signal": self.data_type_changed,
+                "transform": lambda x: DataType(x)
+            }),
+            ("Filter", {
+                "items": ProcessingConfig.FILTER_NAMES,
+                "signal": self.filter_changed,
+                "transform": lambda x: x
+            }),
+            ("Scale", {
+                "items": [f"{s}x" for s in DisplayConfig.SCALE_FACTORS],
+                "signal": self.scale_changed,
+                "transform": lambda x: float(x.rstrip('x'))
+            }),
+            ("Window", {
+                "items": [f"{w}s" for w in DisplayConfig.TIME_WINDOWS],
+                "signal": self.window_changed,
+                "transform": lambda x: float(x.rstrip('s'))
+            })
+        ]
+        
+        for label, config in controls:
+            control_layout = QVBoxLayout()
+            control_layout.setSpacing(DesignSystem.SPACING.xs)
+            
+            # Add label
+            label_widget = QLabel(label)
+            label_widget.setFont(QFont(
+                DesignSystem.TYPOGRAPHY['controls'].family,
+                DesignSystem.TYPOGRAPHY['controls'].size,
+                DesignSystem.TYPOGRAPHY['controls'].weight
+            ))
+            control_layout.addWidget(label_widget)
+            
+            # Add combobox
+            combo = QComboBox()
+            combo.addItems(config["items"])
+            combo.currentTextChanged.connect(
+                lambda text, t=config["transform"], s=config["signal"]: 
+                s.emit(t(text))
+            )
+            combo.setFixedHeight(30)
+            control_layout.addWidget(combo)
+            
+            setattr(self, f"{label.lower()}_combo", combo)
+            self.layout.addLayout(control_layout)
+            
+        self.layout.addStretch()
 
 class MainWindow(QMainWindow):
+    """Main application window with integrated design system"""
+    
     def __init__(self):
         super().__init__()
-
         self.setWindowTitle("Petal Viz 1.0")
-        self.setGeometry(100, 100, 1200, 800)
-        self.setStyleSheet("background-color: #1E1E1E; color: white;")
-
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        icon_path = os.path.join(base_dir, 'src', 'resources', 'images', 'viz_logo.png')
-        self.setWindowIcon(QIcon(icon_path))
-
-        self.central_widget = QWidget()
-        self.setCentralWidget(self.central_widget)
-        self.main_layout = QVBoxLayout(self.central_widget)
-
-        self.setup_menu()
-        self.setup_ui()
-        self.setup_data_processing()
-
-    def setup_ui(self):
-        controls_layout = QHBoxLayout()
+        self.resize(1200, 800)
         
-        for control, default in [("Data", "EEG"), ("Filter", "Mid"), ("Vertical Scale", "200 uHZ"), ("Window", "4 SEC")]:
-            control_layout = QVBoxLayout()
-            
-            label = QLabel(control)
-            label.setStyleSheet("color: white; margin-bottom: 5px;")
-            control_layout.addWidget(label)
-
-            dropdown = QComboBox()
-            dropdown.addItem(default)
-            dropdown.setStyleSheet("""
-                QComboBox {
-                    background-color: #121212;
-                    color: white;
-                    border: 1px solid #C58BFF;
-                    padding: 5px;
-                    padding-right: 20px;
-                    border-radius: 5px;
-                }
-                QComboBox::drop-down {
-                    subcontrol-origin: padding;
-                    subcontrol-position: top right;
-                    width: 20px;
-                    border-left-width: 0px;
-                }
-            """)
-            
-            # Create SVG widget for dropdown arrow
-            menu_down_icon = IconManager.get_icon(f"{control}_menu_down")
-            IconManager.update_icon(f"{control}_menu_down", "menu_down", "#C58BFF")
-            
-            dropdown_layout = QHBoxLayout()
-            dropdown_layout.addWidget(dropdown)
-            dropdown_layout.addWidget(menu_down_icon)
-            dropdown_layout.setSpacing(0)
-            dropdown_layout.setContentsMargins(0, 0, 0, 0)
-            
-            control_layout.addLayout(dropdown_layout)
-            controls_layout.addLayout(control_layout)
+        # Set up UI
+        self.setupWindow()
+        self.setupMenuBar()
+        self.setupCentralWidget()
+        self.setupDataProcessing()
         
-        self.main_layout.addLayout(controls_layout)
-
-        # Visualizer
+        # Initialize state
+        self.current_data_type = DataType.EEG
+        self.monochrome_mode = False
+        
+    def setupWindow(self):
+        """Configure window appearance"""
+        # Set window style
+        self.setStyleSheet(DesignSystem.get_style_sheet())
+        
+        # Set minimum size
+        self.setMinimumSize(800, 600)
+        
+        # Center window
+        self.centerWindow()
+        
+    def setupMenuBar(self):
+        """Create and configure menu bar"""
+        menubar = self.menuBar()
+        
+        # View menu
+        view_menu = menubar.addMenu("View")
+        view_menu.addAction(self.createAction(
+            "Zoom In", 
+            lambda: self.visualizer.scale_changed.emit(2.0)
+        ))
+        view_menu.addAction(self.createAction(
+            "Zoom Out", 
+            lambda: self.visualizer.scale_changed.emit(0.5)
+        ))
+        view_menu.addSeparator()
+        view_menu.addAction(self.createAction(
+            "Monochrome",
+            lambda: self.setColorMode(True)
+        ))
+        view_menu.addAction(self.createAction(
+            "Multicolor",
+            lambda: self.setColorMode(False)
+        ))
+        
+        # Window menu  
+        window_menu = menubar.addMenu("Window")
+        window_menu.addAction(self.createAction(
+            "Enter Fullscreen",
+            self.showFullScreen
+        ))
+        window_menu.addAction(self.createAction(
+            "Exit Fullscreen",
+            self.showNormal
+        ))
+        
+        # Help menu
+        help_menu = menubar.addMenu("Help")
+        help_menu.addAction(self.createAction(
+            "User Guide",
+            lambda: self.openUrl("https://docs.petal.tech")
+        ))
+        help_menu.addAction(self.createAction(
+            "Support",
+            lambda: self.openUrl("https://docs.petal.tech")
+        ))
+        
+    def setupCentralWidget(self):
+        """Create main UI layout"""
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        
+        # Create main layout
+        main_layout = QVBoxLayout(central_widget)
+        main_layout.setSpacing(0)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Add control bar
+        self.control_bar = ControlBar()
+        main_layout.addWidget(self.control_bar)
+        
+        # Add visualizer
         self.visualizer = Visualizer()
-        self.main_layout.addWidget(self.visualizer)
-
-        # Status bar
+        main_layout.addWidget(self.visualizer)
+        
+        # Add timeline
+        self.timeline = Timeline()
+        main_layout.addWidget(self.timeline)
+        
+        # Add status bar
         self.status_bar = StatusBar()
         self.setStatusBar(self.status_bar)
-
-    def setup_menu(self):
-
-        # View menu
-        view_menu = self.menuBar().addMenu("View")
-        view_menu.addAction(self.create_action("Monochrome", self.set_monochrome))
-        view_menu.addAction(self.create_action("Multicolor", self.set_multicolor))
-
-        # Window menu
-        window_menu = self.menuBar().addMenu("Window")
-        window_menu.addAction(self.create_action("Enter Fullscreen", self.enter_fullscreen))
-        window_menu.addAction(self.create_action("Exit Fullscreen", self.exit_fullscreen))
-
-        # Help menu
-        help_menu = self.menuBar().addMenu("Help")
-        help_menu.addAction(self.create_action("User Guide", self.open_user_guide))
-        help_menu.addAction(self.create_action("Support", self.open_support))
-
-    def create_action(self, text, slot):
+        
+        # Connect control signals
+        self.connectControls()
+        
+    def setupDataProcessing(self):
+        """Initialize data processing pipeline"""
+        # Create LSL receiver
+        self.lsl_receiver = LSLReceiver()
+        self.lsl_receiver.connection_changed.connect(self.updateConnectionStatus)
+        self.lsl_receiver.error_occurred.connect(self.status_bar.showError)
+        
+        # Create data processor
+        self.data_processor = DataProcessor(self.current_data_type)
+        
+        # Create processor thread
+        self.processor_thread = DataProcessorThread(self.data_processor)
+        self.processor_thread.processed_data.connect(self.visualizer.updateData)
+        self.processor_thread.processed_data.connect(self.updateQualityMetrics)
+        
+        # Start processing
+        self.lsl_receiver.connect_to_stream()
+        self.processor_thread.start()
+        
+    def connectControls(self):
+        """Connect control signals to handlers"""
+        # Control bar signals
+        self.control_bar.data_type_changed.connect(self.changeDataType)
+        self.control_bar.filter_changed.connect(self.data_processor.set_filter)
+        self.control_bar.scale_changed.connect(self.visualizer.scale_changed)
+        self.control_bar.window_changed.connect(self.visualizer.setTimeWindow)
+        
+        # Visualizer signals
+        self.visualizer.scale_changed.connect(self.updateScaleDisplay)
+        self.visualizer.quality_updated.connect(self.updateQualityMetrics)
+        
+    def changeDataType(self, data_type: DataType):
+        """Handle data type change"""
+        self.current_data_type = data_type
+        self.data_processor.set_data_type(data_type)
+        self.visualizer.setDataType(data_type)
+        self.status_bar.updateDataType(data_type)
+        
+    def setColorMode(self, monochrome: bool):
+        """Toggle between monochrome and color modes"""
+        self.monochrome_mode = monochrome
+        self.visualizer.setColorMode(monochrome)
+        
+    def updateConnectionStatus(self, status: StreamStatus):
+        """Update status bar with connection state"""
+        self.status_bar.updateStreamStatus(status)
+        
+    def updateQualityMetrics(self, metrics: dict):
+        """Update status bar with signal quality metrics"""
+        self.status_bar.updateQualityMetrics(metrics)
+        
+    def updateScaleDisplay(self, scale: float):
+        """Update scale display in control bar"""
+        self.control_bar.scale_combo.setCurrentText(f"{scale:.1f}x")
+        
+    def createAction(self, text: str, slot) -> QAction:
+        """Helper to create menu actions"""
         action = QAction(text, self)
         action.triggered.connect(slot)
         return action
-
-    def setup_data_processing(self):
-        # Set up LSL receiver and data processor
-        self.lsl_receiver = LSLReceiver()
-        self.data_processor = DataProcessor(lsl_receiver=self.lsl_receiver)
         
-        # Set up LSL receiver thread
-        self.receiver_thread = QThread()
-        self.lsl_receiver.moveToThread(self.receiver_thread)
-        self.receiver_thread.started.connect(self.lsl_receiver.connect_to_stream)
+    def centerWindow(self):
+        """Center window on screen"""
+        frame = self.frameGeometry()
+        screen = self.screen().availableGeometry().center()
+        frame.moveCenter(screen)
+        self.move(frame.topLeft())
         
-        # Set up data processor thread
-        self.data_processor_thread = DataProcessorThread(self.data_processor)
-        self.data_processor_thread.processed_data.connect(self.visualizer.update_data)
-        
-        # Connect status signals
-        self.lsl_receiver.connection_changed.connect(self.update_connection_status)
-        
-        # Start threads
-        self.receiver_thread.start()
-        self.data_processor_thread.start()
-
-    def update_connection_status(self, is_connected):
-        status = "Connected" if is_connected else "Disconnected"
-        self.status_bar.update_stream_status(status)
-
     def closeEvent(self, event):
-        # Clean shutdown of threads
-        self.data_processor_thread.stop()
-        self.data_processor_thread.wait()
+        """Clean up resources on close"""
+        self.processor_thread.stop()
+        self.processor_thread.wait()
         self.lsl_receiver.disconnect()
-        self.receiver_thread.quit()
-        self.receiver_thread.wait()
-        super().closeEvent(event)
-
-    def set_monochrome(self):
-        self.visualizer.set_color_mode('monochrome')
-
-    def set_multicolor(self):
-        self.visualizer.set_color_mode('multicolor')
-
-    def enter_fullscreen(self):
-        self.showFullScreen()
-
-    def exit_fullscreen(self):
-        self.showNormal()
-
-    def open_user_guide(self):
-        # Implement opening the user guide URL
-        pass
-
-    def open_support(self):
-        # Implement opening the support URL
-        pass
-
-    def update_battery_status(self, percentage):
-        self.status_bar.update_battery(percentage)
+        event.accept()

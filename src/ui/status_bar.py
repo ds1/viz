@@ -1,5 +1,10 @@
-from PyQt5.QtWidgets import QStatusBar, QLabel, QHBoxLayout, QWidget
-from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import (QStatusBar, QLabel, QHBoxLayout, QWidget)
+from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtSvg import QSvgWidget
+from typing import Dict, Optional
+
+from src.ui.design_system import DesignSystem
+from src.constants import StreamStatus, DataType
 from src.ui.svg_icons import IconManager
 
 class StatusBar(QStatusBar):
