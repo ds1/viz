@@ -1,7 +1,7 @@
 # Add to src/ui/timeline.py (new file)
 
 from PyQt5.QtWidgets import QWidget, QHBoxLayout
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSignal, QLineF, QPointF
 from PyQt5.QtGui import QPainter, QPen, QColor
 
 from src.ui.design_system import DesignSystem
@@ -32,20 +32,25 @@ class Timeline(QWidget):
         pen.setWidthF(0.5)
         painter.setPen(pen)
         
-        # Draw markers
-        width = self.width()
-        height = self.height()
-        time_interval = width / 4  # 4 major divisions
-        
-        for i in range(5):  # 0 to 4 seconds
-            x = i * time_interval
-            painter.drawLine(x, 0, x, height / 2)
+        try:
+            # Draw markers
+            width = self.width()
+            height = self.height()
+            time_interval = width / 4  # 4 major divisions
             
-            # Draw time label
-            if i < 4:  # Don't draw at the end
-                label = f"{i}.000s"
-                painter.drawText(
-                    x + 5,
-                    height - 10,
-                    label
-                )
+            for i in range(5):  # 0 to 4 seconds
+                x = i * time_interval
+                # Use QLineF for floating point coordinates
+                line = QLineF(x, 0, x, height / 2)
+                painter.drawLine(line)
+                
+                # Draw time label
+                if i < 4:  # Don't draw at the end
+                    label = f"{i}.000s"
+                    painter.drawText(
+                        int(x + 5),  # Convert to int for drawText
+                        height - 10,
+                        label
+                    )
+        finally:
+            painter.end()

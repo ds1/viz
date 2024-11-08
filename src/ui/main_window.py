@@ -226,15 +226,15 @@ class MainWindow(QMainWindow):
                 self.status_bar.updateStreamStatus
             )
             self.lsl_receiver.error_occurred.connect(
-                self.status_bar.showError  # Changed from show_error to showError
+                self.status_bar.showError
             )
         
         # UI connections that don't depend on external components
         self.control_bar.scale_changed.connect(
-            self.visualizer.set_scale
+            self.visualizer.setScale  # Updated to match the method name
         )
         self.control_bar.window_changed.connect(
-            self.visualizer.set_time_window
+            self.visualizer.setTimeWindow  # Make sure this method exists too
         )
         
         # Visualizer signals

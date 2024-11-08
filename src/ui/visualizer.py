@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                            QPushButton, QSizePolicy, QFrame)
-from PyQt5.QtCore import Qt, QTimer, QRectF, QSize, pyqtSignal
+from PyQt5.QtCore import Qt, QTimer, QRectF, QSize, pyqtSignal, QLineF, QPointF
 from PyQt5.QtGui import QPainter, QPen, QColor
 import pyqtgraph as pg
 import numpy as np
@@ -112,18 +112,23 @@ class GridOverlay(QWidget):
         height = self.height()
         time_interval = width / 4  # 4 major divisions
         
-        for i in range(5):  # 0 to 4 seconds
-            x = i * time_interval
-            painter.drawLine(x, 0, x, height)
-            
-            # Draw time label
-            if i < 4:  # Don't draw -0s
-                label = f"-{4-i}.000s"
-                painter.drawText(
-                    x + 5,
-                    height - 20,
-                    label
-                )
+        try:
+            for i in range(5):  # 0 to 4 seconds
+                x = i * time_interval
+                # Use QLineF for floating point coordinates
+                line = QLineF(x, 0, x, height)
+                painter.drawLine(line)
+                
+                # Draw time label
+                if i < 4:  # Don't draw -0s
+                    label = f"-{4-i}.000s"
+                    painter.drawText(
+                        int(x + 5),  # Convert to int for drawText
+                        height - 20,
+                        label
+                    )
+        finally:
+            painter.end()
 
 class Visualizer(QWidget):
     """Main visualization widget with enhanced UX and visual design"""
@@ -259,19 +264,8 @@ class Visualizer(QWidget):
             new_scale = self.scale_factor * scale_change
             
             if DisplayConfig.MIN_SCALE <= new_scale <= DisplayConfig.MAX_SCALE:
-                self.scale_factor = new_scale
+                self.setScale(new_scale)
                 self.scale_changed.emit(new_scale)
-                
-                for plot in self.plots:
-                    view_box = plot.getViewBox()
-                    current_range = view_box.viewRange()[1]
-                    center = sum(current_range) / 2
-                    half_height = (current_range[1] - current_range[0]) * scale_change / 2
-                    view_box.setYRange(
-                        center - half_height,
-                        center + half_height,
-                        padding=0
-                    )
                     
         event.accept()
         
@@ -296,7 +290,23 @@ class Visualizer(QWidget):
         self.pause_button.setIcon(
             DesignSystem.ICONS.play if self.paused else DesignSystem.ICONS.pause
         )
-        
+
+    def setScale(self, scale_factor: float):
+        """Set the vertical scale factor"""
+        if DisplayConfig.MIN_SCALE <= scale_factor <= DisplayConfig.MAX_SCALE:
+            self.scale_factor = scale_factor
+            
+            for plot in self.plots:
+                view_box = plot.getViewBox()
+                current_range = view_box.viewRange()[1]
+                center = sum(current_range) / 2
+                half_height = (current_range[1] - current_range[0]) * scale_factor / 2
+                view_box.setYRange(
+                    center - half_height,
+                    center + half_height,
+                    padding=0
+                )
+
     @staticmethod
     def getChannelLabelStyle(channel_name: str) -> str:
         """Get stylesheet for channel label"""

@@ -84,7 +84,7 @@ class LSLReceiver(QObject):
     
     # Signals use simple types or object
     data_ready = pyqtSignal(object, object)  # for numpy arrays
-    status_changed = pyqtSignal(str)         # for status string
+    status_changed = pyqtSignal(object)         # for StreamStatus
     stream_info_updated = pyqtSignal(object) # for stream info
     error_occurred = pyqtSignal(str)         # for error message
     quality_updated = pyqtSignal(object)     # for quality dict
@@ -336,10 +336,10 @@ class LSLReceiver(QObject):
         if not self.connected:
             self.reconnect_timer.start(self.reconnect_interval)
             
-    def _update_status(self, status: StreamStatus) -> None:
+    def _update_status(self, status: StreamStatus):
         """Update and emit status"""
         self.status = status
-        self.status_changed.emit(status)
+        self.status_changed.emit(status)  # Now emits StreamStatus object
         
     def get_stream_info(self) -> Optional[StreamInfo]:
         """Get current stream information"""
