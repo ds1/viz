@@ -138,16 +138,11 @@ class LSLReceiver(QObject):
         # Timer for checking stream health
         self.health_check_timer = QTimer(self)
         self.health_check_timer.timeout.connect(self.check_stream_health)
-        self.health_check_timer.start(1000)  # Check every second
+        self.health_check_timer.start(5000)  # Check every 5 seconds
         
         # Timer for automatic reconnection
         self.reconnect_timer = QTimer(self)
         self.reconnect_timer.timeout.connect(self.attempt_reconnect)
-        
-        # Timer for quality monitoring
-        self.quality_timer = QTimer(self)
-        self.quality_timer.timeout.connect(self.check_signal_quality)
-        self.quality_timer.start(self.quality_check_interval)
         
     def connect_to_stream(self) -> None:
         """Connect to LSL stream"""
@@ -220,21 +215,15 @@ class LSLReceiver(QObject):
                 )
                 
                 if samples:
-                    logging.debug(f"Received {len(samples)} samples")
-
                     # Convert to numpy arrays
                     samples = np.array(samples).T # Important: transpose to get [channels, samples]
                     timestamps = np.array(timestamps)
 
-                    logging.debug(f"Shaped data: {samples.shape}")
-
                     # Emit data immediately
                     self.data_ready.emit(samples, timestamps)
                     
-                    # Also update buffer
+                    # Update buffer and state
                     self.buffer.add(samples, timestamps)
-                    
-                    # Update state
                     self.last_timestamp = timestamps[-1]
                     self.sample_count += len(timestamps)
                     

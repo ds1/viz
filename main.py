@@ -23,7 +23,6 @@ from src.data.data_processor import DataProcessor
 
 class Application(QApplication):
     def __init__(self, argv):
-        logger.debug("Initializing Application")
         super().__init__(argv)
         
         # Create processing threads
@@ -37,46 +36,37 @@ class Application(QApplication):
         self.start_processing()
         
     def setup_components(self):
-        logger.debug("Setting up components")
         try:
             initial_data_type = DataType.EEG
-            logger.debug(f"Initial data type: {initial_data_type} (type: {type(initial_data_type)})")
             
             # Create components
-            logger.debug("Creating LSLReceiver...")
             self.lsl_receiver = LSLReceiver(
                 stream_type=initial_data_type.value,
                 buffer_size=ProcessingConfig.BUFFER_SIZES[initial_data_type],
                 auto_reconnect=True
             )
             
-            logger.debug("Creating DataProcessor...")
             self.data_processor = DataProcessor(initial_data_type)
             
-            logger.debug("Creating MainWindow with dependencies...")
             self.main_window = MainWindow(
                 data_processor=self.data_processor,
                 lsl_receiver=self.lsl_receiver
             )
-            logger.debug("Components setup complete")
             
         except Exception as e:
             logger.error(f"Error in setup_components: {str(e)}", exc_info=True)
             raise
             
     def move_to_threads(self):
-        logger.debug("Moving components to threads")
         self.lsl_receiver.moveToThread(self.receiver_thread)
         self.receiver_thread.started.connect(self.lsl_receiver.connect_to_stream)
         self.data_processor.moveToThread(self.processor_thread)
         
     def connect_signals(self):
         """Connect component signals"""
-        logging.debug("Connecting signals")
         try:
             # Handle data type changes
             def on_data_type_changed(value: str):
-                logging.debug(f"Received data type change: {value}")
                 try:
                     enum_value = DataType(value)
                     self.change_data_type(enum_value)
@@ -104,13 +94,11 @@ class Application(QApplication):
                 self.main_window.status_bar.showError
             )
                 
-            logging.debug("Signals connected successfully")
         except Exception as e:
             logging.error(f"Error in connect_signals: {str(e)}", exc_info=True)
             raise
 
     def change_data_type(self, data_type: DataType):
-        logger.debug(f"Changing data type to: {data_type}")
         try:
             self.lsl_receiver.disconnect()
             self.data_processor.enable_processing(False)
@@ -121,20 +109,16 @@ class Application(QApplication):
             
             self.lsl_receiver.connect_to_stream()
             self.data_processor.enable_processing(True)
-            
-            logger.debug("Data type change complete")
         except Exception as e:
-            logger.error(f"Error in change_data_type: {str(e)}", exc_info=True)
+            logging.error(f"Error in change_data_type: {str(e)}", exc_info=True)
             raise
             
     def start_processing(self):
-        logger.debug("Starting processing")
         self.receiver_thread.start()
         self.processor_thread.start()
         self.main_window.show()
         
     def cleanup(self):
-        logger.debug("Cleaning up")
         self.lsl_receiver.disconnect()
         self.data_processor.enable_processing(False)
         self.receiver_thread.quit()
@@ -144,7 +128,6 @@ class Application(QApplication):
 
 def main():
     try:
-        logger.info("Starting application")
         app = Application(sys.argv)
         return app.exec_()
     except Exception as e:

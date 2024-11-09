@@ -206,8 +206,6 @@ class Visualizer(QWidget):
                     
     def updateData(self, processed: ProcessedData):
         """Handle new processed data"""
-        # logging.info(f"Visualizer received data: {processed.data.shape}")
-        
         try:
             self.data_buffer = processed.data
             
@@ -231,7 +229,6 @@ class Visualizer(QWidget):
             return
             
         try:
-            logging.debug("Updating plots")
             for i, plot in enumerate(self.plots):
                 if i < len(self.data_buffer):
                     plot.curve.setData(

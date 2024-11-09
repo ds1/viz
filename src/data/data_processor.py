@@ -149,9 +149,6 @@ class DataProcessor(QObject):
             
         try:
             with QMutexLocker(self.mutex):
-
-                # logging.debug(f"Processing data shape: {new_data.shape}")
-
                 # Add to raw buffer
                 self.raw_buffer.add(new_data)
                 
@@ -159,32 +156,17 @@ class DataProcessor(QObject):
                 data = self.raw_buffer.get_data()
                 if data is None or data.shape[1] < ProcessingConfig.MIN_SAMPLES:
                     return
-                
-                # logging.debug(f"Processing buffered data: {data.shape}")
 
                 # Apply current filter if needed
                 if self.current_filter != 'off':
                     data = self.apply_filter(data)
-                                    
-                # # Detect artifacts
-                # artifacts = self.detect_artifacts(data)
-                
-                # # Process PPG heart rate
-                # heart_rate = heart_rate_confidence = None
-                # if self.data_type == DataType.PPG:
-                #     heart_rate, heart_rate_confidence = self.process_heart_rate(data)
                 
                 # Create processed data object
                 processed = ProcessedData(
                     data=data,
                     timestamp=timestamp
-                    # heart_rate=heart_rate,
-                    # heart_rate_confidence=heart_rate_confidence,
-                    # artifacts=artifacts
                 )
                 
-                # logging.info(f"Emitting processed data shape: {data.shape}")
-
                 # Emit processed data
                 self.processed_data.emit(processed)
 
