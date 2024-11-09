@@ -155,16 +155,20 @@ class LSLReceiver(QObject):
         
         try:
             # Find streams matching type
-            streams = resolve_stream('type', self.stream_type, timeout=1.0)  # Uses the string value
+            logging.debug(f"Searching for stream type: {self.stream_type}")
+            streams = resolve_stream('type', self.stream_type)
             
             if not streams:
+                logging.debug("No streams found")
                 msg = ErrorMessages.STREAM_NOT_FOUND.format(
-                    stream_type=self.stream_type.value
+                    stream_type=self.stream_type
                 )
                 self.error_occurred.emit(msg)
                 if self.auto_reconnect:
                     self._start_reconnection()
                 return
+            
+            logging.debug(f"Found {len(streams)} streams")
                 
             # Validate stream
             if not self._validate_stream(streams[0]):
@@ -179,15 +183,15 @@ class LSLReceiver(QObject):
             )
             
             # Get stream info
-            info = streams[0].info()
+            stream = streams[0]  # StreamInfo object is already the info
             self.stream_info = StreamInfo(
-                name=info.name(),
+                name=stream.name(),
                 type=self.stream_type,
-                channel_count=info.channel_count(),
-                sampling_rate=info.nominal_srate(),
-                source_id=info.source_id(),
+                channel_count=stream.channel_count(),
+                sampling_rate=stream.nominal_srate(),
+                source_id=stream.source_id(),
                 created_at=local_clock(),
-                version=info.version()
+                version=stream.version()
             )
             
             # Update state
@@ -216,12 +220,16 @@ class LSLReceiver(QObject):
                 )
                 
                 if samples:
+                    logging.debug(f"Received {len(samples)} samples")
+
                     # Convert to numpy arrays
                     samples = np.array(samples).T
                     timestamps = np.array(timestamps)
                     
                     # Add to buffer
                     self.buffer.add(samples, timestamps)
+
+                    logging.debug(f"Data shape: {samples.shape}")
                     
                     # Update state
                     self.last_timestamp = timestamps[-1]
@@ -243,16 +251,23 @@ class LSLReceiver(QObject):
     def _validate_stream(self, stream_info) -> bool:
         """Validate stream parameters"""
         try:
-            if stream_info.channel_count() != self.required_channels:
-                msg = f"Invalid channel count: {stream_info.channel_count()}"
+            logging.debug(f"Validating stream: {stream_info.name()} ({stream_info.type()})")
+            logging.debug(f"Channel count: {stream_info.channel_count()}")
+            logging.debug(f"Sampling rate: {stream_info.nominal_srate()}")
+            
+            if stream_info.channel_count() < 4:  # Require minimum channels
+                msg = f"Insufficient channels: {stream_info.channel_count()}, minimum 4 required"
+                logging.error(msg)
                 self.error_occurred.emit(msg)
                 return False
                 
             if abs(stream_info.nominal_srate() - self.sampling_rate) > 1:
-                msg = f"Invalid sampling rate: {stream_info.nominal_srate()}"
+                msg = f"Invalid sampling rate: {stream_info.nominal_srate()}, expected {self.sampling_rate}"
+                logging.error(msg)
                 self.error_occurred.emit(msg)
                 return False
                 
+            logging.debug("Stream validation successful")
             return True
             
         except Exception as e:

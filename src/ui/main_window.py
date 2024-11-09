@@ -202,6 +202,7 @@ class MainWindow(QMainWindow):
         """Initialize data processing pipeline - only if dependencies not provided"""
         if self.lsl_receiver is None:
             self.lsl_receiver = LSLReceiver()
+            self.lsl_receiver.data_ready.connect(self.data_processor.process_data)
             self.lsl_receiver.connection_changed.connect(self.updateConnectionStatus)
             self.lsl_receiver.error_occurred.connect(self.status_bar.showError)
         
@@ -209,10 +210,11 @@ class MainWindow(QMainWindow):
             self.data_processor = DataProcessor(self.current_data_type)
             self.processor_thread = DataProcessorThread(self.data_processor)
             self.processor_thread.processed_data.connect(self.visualizer.updateData)
-            self.processor_thread.processed_data.connect(self.updateQualityMetrics)
+            # self.processor_thread.processed_data.connect(self.updateQualityMetrics)
+            self.processor_thread.error_occurred.connect(self.status_bar.showError)
             
-            self.lsl_receiver.connect_to_stream()
-            self.processor_thread.start()
+        self.lsl_receiver.connect_to_stream()
+        self.processor_thread.start()
         
     def connectControls(self):
         """Connect control signals"""

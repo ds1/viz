@@ -1,0 +1,38 @@
+Repository structure for: C:\Users\danma\Documents\GitHub\petal_viz
+==================================================
+
+petal_viz/
+├── .gitignore
+├── README.md
+├── conda_setup.py
+├── desktop.ini
+├── environment.yml
+├── main.py
+├── repo_structure.txt
+└── requirements.txt
+├── original_proof_of_concept/
+│   ├── vispyqt_visualizer_MVP_v8.py
+│   ├── vispyqt_visualizer_helperFuncsTest.py
+│   └── vispyqt_visualizer_helperFuncs_v25.py
+├── src/
+│   ├── __init__.py
+│   ├── constants.py
+│   └── custom_types.py
+│   ├── data/
+│   │   ├── __init__.py
+│   │   ├── data_processor.py
+│   │   ├── lsl_receiver.py
+│   │   └── utils.py
+│   ├── resources/
+│   │   ├── icons/
+│   │   ├── images/
+│   │   │   └── viz_logo.png
+│   │   ├── styles/
+│   ├── ui/
+│   │   ├── __init__.py
+│   │   ├── design_system.py
+│   │   ├── main_window.py
+│   │   ├── status_bar.py
+│   │   ├── stylesheet_manager.py
+│   │   ├── svg_icons.py
+│   │   └── visualizer.py

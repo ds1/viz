@@ -49,7 +49,8 @@ class StreamConfig:
             'TP9': StreamChannelConfig('Left Ear', 'µV', (-500, 500), '#4CAF50'),
             'FP1': StreamChannelConfig('Left Forehead', 'µV', (-500, 500), '#2196F3'),
             'FP2': StreamChannelConfig('Right Forehead', 'µV', (-500, 500), '#F44336'),
-            'TP10': StreamChannelConfig('Right Ear', 'µV', (-500, 500), '#FFC107')
+            'TP10': StreamChannelConfig('Right Ear', 'µV', (-500, 500), '#FFC107'),
+            'AUX': StreamChannelConfig('Auxiliary', 'µV', (-500, 500), '#9C27B0')
         },
         DataType.PPG: {
             'Ambient': StreamChannelConfig('Ambient', 'units', (0, 4096), '#9C27B0'),

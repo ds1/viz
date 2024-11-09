@@ -78,6 +78,9 @@ class Application(QApplication):
                 try:
                     enum_value = DataType(value)
                     self.change_data_type(enum_value)
+                    self.lsl_receiver.error_occurred.connect(
+                        lambda msg: logger.error(f"LSL Error: {msg}")
+                    )
                 except Exception as e:
                     logger.error(f"Error converting data type: {str(e)}")
                     raise

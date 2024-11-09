@@ -1,4 +1,4 @@
-from PyQt5.QtCore import QObject, QThread, QMutex, pyqtSignal
+from PyQt5.QtCore import QObject, QThread, QRecursiveMutex, QMutex, QMutexLocker, pyqtSignal
 import numpy as np
 from typing import Optional, Dict, Any, Tuple
 from collections import deque
@@ -149,7 +149,10 @@ class DataProcessor(QObject):
             return
             
         try:
-            with QMutex():
+            with QMutexLocker(self.mutex):
+
+                logging.debug(f"Processing data shape: {new_data.shape}")
+
                 # Add to raw buffer
                 self.raw_buffer.add(new_data)
                 
@@ -157,7 +160,9 @@ class DataProcessor(QObject):
                 data = self.raw_buffer.get_data()
                 if data is None or len(data) < ProcessingConfig.MIN_SAMPLES:
                     return
-                    
+                
+                print(f"Processing data: {data.shape}")
+
                 # Apply current filter if needed
                 if self.current_filter != 'off':
                     data = self.apply_filter(data)
@@ -185,9 +190,11 @@ class DataProcessor(QObject):
                 
                 # Emit processed data
                 self.processed_data.emit(processed)
-                
+
+                pass
+
         except Exception as e:
-            logging.error(f"Error processing data: {str(e)}")
+            logging.error(f"Error processing data: {str(e)}", exc_info=True)
             self.error_occurred.emit(str(e))
             
     def apply_filter(self, data: np.ndarray) -> np.ndarray:
@@ -296,6 +303,7 @@ class DataProcessorThread(QThread):
                 if hasattr(self.processor, 'process_data'):
                     result = self.processor.process_data()
                     if result is not None:
+                        print(f"Sending processed data: {result.data.shape}")
                         self.processed_data.emit(result)
                 
                 # Sleep briefly to prevent CPU overuse
