@@ -71,33 +71,50 @@ class Application(QApplication):
         self.data_processor.moveToThread(self.processor_thread)
         
     def connect_signals(self):
-        logger.debug("Connecting signals")
+        """Connect component signals"""
+        logging.debug("Connecting signals")
         try:
+            # Handle data type changes
             def on_data_type_changed(value: str):
-                logger.debug(f"Received data type change: {value}")
+                logging.debug(f"Received data type change: {value}")
                 try:
                     enum_value = DataType(value)
                     self.change_data_type(enum_value)
-                    self.lsl_receiver.error_occurred.connect(
-                        lambda msg: logger.error(f"LSL Error: {msg}")
-                    )
                 except Exception as e:
-                    logger.error(f"Error converting data type: {str(e)}")
+                    logging.error(f"Error converting data type: {str(e)}")
                     raise
 
-            # Connect all signals with consistent method names
-            self.main_window.control_bar.data_type_changed.connect(on_data_type_changed)
+            # Connect data flow signals
             self.lsl_receiver.data_ready.connect(self.data_processor.process_data)
             self.data_processor.processed_data.connect(
                 self.main_window.visualizer.updateData
             )
-            self.lsl_receiver.error_occurred.connect(
-                self.main_window.status_bar.showError  # Match the method name
-            )
+
+            # Connect control signals
+            self.main_window.control_bar.data_type_changed.connect(on_data_type_changed)
             
-            logger.debug("Signals connected successfully")
+            # Connect status and error signals
+            self.lsl_receiver.status_changed.connect(
+                self.main_window.status_bar.updateStreamStatus
+            )
+            self.lsl_receiver.error_occurred.connect(
+                self.main_window.status_bar.showError
+            )
+            self.data_processor.error_occurred.connect(
+                self.main_window.status_bar.showError
+            )
+
+            # Connect quality metrics
+            self.data_processor.processed_data.connect(
+                self.main_window.visualizer.updateData
+            )
+            self.main_window.visualizer.quality_updated.connect(
+                self.main_window.status_bar.updateQualityMetrics
+            )
+                
+            logging.debug("Signals connected successfully")
         except Exception as e:
-            logger.error(f"Error in connect_signals: {str(e)}", exc_info=True)
+            logging.error(f"Error in connect_signals: {str(e)}", exc_info=True)
             raise
 
     def change_data_type(self, data_type: DataType):

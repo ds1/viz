@@ -158,10 +158,10 @@ class DataProcessor(QObject):
                 
                 # Get complete data for processing
                 data = self.raw_buffer.get_data()
-                if data is None or len(data) < ProcessingConfig.MIN_SAMPLES:
+                if data is None or data.shape[1] < ProcessingConfig.MIN_SAMPLES:
                     return
                 
-                print(f"Processing data: {data.shape}")
+                logging.debug(f"Processing buffered data: {data.shape}")
 
                 # Apply current filter if needed
                 if self.current_filter != 'off':
@@ -170,28 +170,28 @@ class DataProcessor(QObject):
                 # Update quality metrics
                 self.update_quality_metrics(data)
                 
-                # Detect artifacts
-                artifacts = self.detect_artifacts(data)
+                # # Detect artifacts
+                # artifacts = self.detect_artifacts(data)
                 
-                # Process PPG heart rate
-                heart_rate = heart_rate_confidence = None
-                if self.data_type == DataType.PPG:
-                    heart_rate, heart_rate_confidence = self.process_heart_rate(data)
+                # # Process PPG heart rate
+                # heart_rate = heart_rate_confidence = None
+                # if self.data_type == DataType.PPG:
+                #     heart_rate, heart_rate_confidence = self.process_heart_rate(data)
                 
                 # Create processed data object
                 processed = ProcessedData(
                     data=data,
                     timestamp=timestamp,
                     quality=self.current_quality,
-                    heart_rate=heart_rate,
-                    heart_rate_confidence=heart_rate_confidence,
-                    artifacts=artifacts
+                    # heart_rate=heart_rate,
+                    # heart_rate_confidence=heart_rate_confidence,
+                    # artifacts=artifacts
                 )
                 
+                logging.info(f"Emitting processed data shape: {data.shape}")
+
                 # Emit processed data
                 self.processed_data.emit(processed)
-
-                pass
 
         except Exception as e:
             logging.error(f"Error processing data: {str(e)}", exc_info=True)

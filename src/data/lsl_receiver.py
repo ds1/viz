@@ -223,23 +223,22 @@ class LSLReceiver(QObject):
                     logging.debug(f"Received {len(samples)} samples")
 
                     # Convert to numpy arrays
-                    samples = np.array(samples).T
+                    samples = np.array(samples).T # Important: transpose to get [channels, samples]
                     timestamps = np.array(timestamps)
-                    
-                    # Add to buffer
-                    self.buffer.add(samples, timestamps)
 
-                    logging.debug(f"Data shape: {samples.shape}")
+                    logging.debug(f"Shaped data: {samples.shape}")
+
+                    # Emit data immediately
+                    self.data_ready.emit(samples, timestamps)
+                    
+                    # Also update buffer
+                    self.buffer.add(samples, timestamps)
                     
                     # Update state
                     self.last_timestamp = timestamps[-1]
                     self.sample_count += len(timestamps)
                     
-                    # Emit data
-                    self.data_ready.emit(samples, timestamps)
-                    
             except TimeoutError:
-                # Normal timeout, continue
                 continue
                 
             except Exception as e:

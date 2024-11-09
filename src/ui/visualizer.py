@@ -4,6 +4,7 @@ from PyQt5.QtCore import Qt, QTimer, QRectF, QSize, pyqtSignal, QLineF, QPointF
 from PyQt5.QtGui import QPainter, QPen, QColor, QPalette
 import pyqtgraph as pg
 import numpy as np
+import logging
 from typing import List, Dict, Optional, Tuple
 
 from src.ui.design_system import DesignSystem
@@ -225,32 +226,48 @@ class Visualizer(QWidget):
         self.layout.addLayout(button_layout)
         
     def updateData(self, processed: ProcessedData):
+        """Handle new processed data"""
         if self.paused:
             return
 
-        print(f"Received data: {processed.data.shape}")
-        self.data_buffer = processed.data
-        self.time_data = np.linspace(
-            -DisplayConfig.DEFAULT_TIME_WINDOW,
-            0,
-            self.data_buffer.shape[1]
-        )
+        logging.info(f"Visualizer received data: {processed.data.shape}")
+        
+        try:
+            self.data_buffer = processed.data
+            
+            # Update time points
+            n_samples = processed.data.shape[1]
+            self.time_data = np.linspace(
+                -DisplayConfig.DEFAULT_TIME_WINDOW, 
+                0, 
+                n_samples
+            )
 
-        # Calculate and emit signal quality metrics
-        quality_metrics = {
-            channel: processed.quality[channel].overall_quality
-            for channel in self.channels
-        }
-        self.quality_updated.emit(quality_metrics)
-
-        # Update the plots
-        self.updatePlots()
+            # Update quality metrics
+            if processed.quality:
+                self.quality_updated.emit(processed.quality)
+            
+            # Trigger plot update
+            self.updatePlots()
+            
+        except Exception as e:
+            logging.error(f"Error updating visualizer data: {e}", exc_info=True)
             
     def updatePlots(self):
         """Update all plot visualizations"""
-        if self.data_buffer is not None and self.time_data is not None:
-            for plot, data in zip(self.plots, self.data_buffer):
-                plot.curve.setData(x=self.time_data, y=data)
+        if self.data_buffer is None or self.time_data is None:
+            return
+            
+        try:
+            logging.debug("Updating plots")
+            for i, plot in enumerate(self.plots):
+                if i < len(self.data_buffer):
+                    plot.curve.setData(
+                        x=self.time_data, 
+                        y=self.data_buffer[i]
+                    )
+        except Exception as e:
+            logging.error(f"Error updating plots: {e}", exc_info=True)
                 
     def wheelEvent(self, event):
         """Handle synchronized vertical scaling"""

@@ -220,10 +220,18 @@ class MainWindow(QMainWindow):
         """Connect control signals"""
         # Data processor connections
         if self.data_processor:
-            self.control_bar.filter_changed.connect(self.data_processor.set_filter)
+            self.data_processor.processed_data.connect(
+                self.visualizer.updateData
+            )
+            self.data_processor.error_occurred.connect(
+                self.status_bar.showError
+            )
             
-        # LSL receiver connections
+        # LSL receiver connections    
         if self.lsl_receiver:
+            self.lsl_receiver.data_ready.connect(
+                self.data_processor.process_data
+            )
             self.lsl_receiver.status_changed.connect(
                 self.status_bar.updateStreamStatus
             )
