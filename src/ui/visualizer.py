@@ -135,7 +135,6 @@ class Visualizer(QWidget):
     
     # Signals
     scale_changed = pyqtSignal(float)
-    quality_updated = pyqtSignal(object)
     
     def __init__(self, parent=None, data_type: DataType = DataType.EEG):
         super().__init__(parent)
@@ -155,7 +154,6 @@ class Visualizer(QWidget):
         self.time_data = None
         self.scale_factor = 1.0
         self.monochrome = False
-        self.paused = False
         
         # Create UI elements
         self.setupUi()
@@ -174,17 +172,14 @@ class Visualizer(QWidget):
         self.layout.setContentsMargins(0, 0, 0, 0)
         
         # Plot container
-        self.plot_container = PlotContainer()  # Removed data_type parameter
+        self.plot_container = PlotContainer()
         self.layout.addWidget(self.plot_container)
         
         # Channel layout
         self.channel_layout = QVBoxLayout()
         self.channel_layout.setSpacing(DesignSystem.SPACING.sm)
         self.plot_container.layout.addLayout(self.channel_layout)
-        
-        # Create pause button
-        self.createPauseButton()
-        
+                
     def setupPlots(self):
         """Create and configure plot widgets"""
         self.plots: List[ChannelPlot] = []
@@ -208,29 +203,10 @@ class Visualizer(QWidget):
             row.addWidget(plot)
             
             self.channel_layout.addLayout(row)
-            
-    def createPauseButton(self):
-        """Create and style pause button with fixed icons"""
-        button_layout = QHBoxLayout()
-        
-        self.pause_button = QPushButton()
-        # Use icons from DesignSystem
-        self.pause_button.setIcon(DesignSystem.ICONS.pause)
-        self.pause_button.setIconSize(QSize(20, 20))
-        self.pause_button.setFixedSize(30, 30)
-        self.pause_button.setStyleSheet(DesignSystem.get_pause_button_style())
-        self.pause_button.clicked.connect(self.togglePause)
-        
-        button_layout.addWidget(self.pause_button, alignment=Qt.AlignLeft)
-        button_layout.addStretch()
-        self.layout.addLayout(button_layout)
-        
+                    
     def updateData(self, processed: ProcessedData):
         """Handle new processed data"""
-        if self.paused:
-            return
-
-        logging.info(f"Visualizer received data: {processed.data.shape}")
+        # logging.info(f"Visualizer received data: {processed.data.shape}")
         
         try:
             self.data_buffer = processed.data
@@ -242,10 +218,6 @@ class Visualizer(QWidget):
                 0, 
                 n_samples
             )
-
-            # Update quality metrics
-            if processed.quality:
-                self.quality_updated.emit(processed.quality)
             
             # Trigger plot update
             self.updatePlots()
@@ -296,13 +268,6 @@ class Visualizer(QWidget):
             view_box = plot.getViewBox()
             view_box.setXRange(-seconds, 0, padding=0)
             
-    def togglePause(self):
-        """Toggle data update pause state"""
-        self.paused = not self.paused
-        self.pause_button.setIcon(
-            DesignSystem.ICONS.play if self.paused else DesignSystem.ICONS.pause
-        )
-
     def setScale(self, scale_factor: float):
         """Set the vertical scale factor"""
         if DisplayConfig.MIN_SCALE <= scale_factor <= DisplayConfig.MAX_SCALE:

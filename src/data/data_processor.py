@@ -22,10 +22,9 @@ class ProcessedData:
     """Container for processed data and metrics"""
     data: np.ndarray
     timestamp: float
-    quality: Dict[str, SignalQuality]
-    heart_rate: Optional[float] = None
-    heart_rate_confidence: Optional[float] = None
-    artifacts: Optional[np.ndarray] = None
+    # heart_rate: Optional[float] = None
+    # heart_rate_confidence: Optional[float] = None
+    # artifacts: Optional[np.ndarray] = None
 
 class CircularBuffer:
     """Thread-safe circular buffer for real-time data"""
@@ -151,7 +150,7 @@ class DataProcessor(QObject):
         try:
             with QMutexLocker(self.mutex):
 
-                logging.debug(f"Processing data shape: {new_data.shape}")
+                # logging.debug(f"Processing data shape: {new_data.shape}")
 
                 # Add to raw buffer
                 self.raw_buffer.add(new_data)
@@ -161,15 +160,12 @@ class DataProcessor(QObject):
                 if data is None or data.shape[1] < ProcessingConfig.MIN_SAMPLES:
                     return
                 
-                logging.debug(f"Processing buffered data: {data.shape}")
+                # logging.debug(f"Processing buffered data: {data.shape}")
 
                 # Apply current filter if needed
                 if self.current_filter != 'off':
                     data = self.apply_filter(data)
-                    
-                # Update quality metrics
-                self.update_quality_metrics(data)
-                
+                                    
                 # # Detect artifacts
                 # artifacts = self.detect_artifacts(data)
                 
@@ -181,14 +177,13 @@ class DataProcessor(QObject):
                 # Create processed data object
                 processed = ProcessedData(
                     data=data,
-                    timestamp=timestamp,
-                    quality=self.current_quality,
+                    timestamp=timestamp
                     # heart_rate=heart_rate,
                     # heart_rate_confidence=heart_rate_confidence,
                     # artifacts=artifacts
                 )
                 
-                logging.info(f"Emitting processed data shape: {data.shape}")
+                # logging.info(f"Emitting processed data shape: {data.shape}")
 
                 # Emit processed data
                 self.processed_data.emit(processed)

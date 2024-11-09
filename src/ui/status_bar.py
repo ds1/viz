@@ -36,8 +36,3 @@ class StatusBar(QStatusBar):
     def updateDataType(self, data_type: DataType):
         """Update data type display"""
         self.output_settings.setText(f"Output: {data_type.value}")
-
-    def updateQualityMetrics(self, metrics: dict):
-        """Update quality metrics display"""
-        quality_str = ", ".join([f"{k}: {v:.2f}" for k, v in metrics.items()])
-        self.device_status.setText(f"Quality: {quality_str}")

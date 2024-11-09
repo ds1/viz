@@ -249,7 +249,6 @@ class MainWindow(QMainWindow):
         
         # Visualizer signals
         self.visualizer.scale_changed.connect(self.updateScaleDisplay)
-        self.visualizer.quality_updated.connect(self.updateQualityMetrics)
         
     def changeDataType(self, data_type: DataType):
         """Handle data type change"""

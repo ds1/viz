@@ -103,14 +103,6 @@ class Application(QApplication):
             self.data_processor.error_occurred.connect(
                 self.main_window.status_bar.showError
             )
-
-            # Connect quality metrics
-            self.data_processor.processed_data.connect(
-                self.main_window.visualizer.updateData
-            )
-            self.main_window.visualizer.quality_updated.connect(
-                self.main_window.status_bar.updateQualityMetrics
-            )
                 
             logging.debug("Signals connected successfully")
         except Exception as e:
