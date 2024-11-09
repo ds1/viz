@@ -139,7 +139,7 @@ class DisplayConfig:
     MAX_SCALE = 10.0
     
     # Display update rate
-    DISPLAY_REFRESH_RATE = 30  # Hz
+    DISPLAY_REFRESH_RATE = 60  # Hz
     MINIMUM_REFRESH_INTERVAL = 1000 // DISPLAY_REFRESH_RATE  # ms
     
     # Grid configuration

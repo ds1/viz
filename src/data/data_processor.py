@@ -27,38 +27,39 @@ class ProcessedData:
     # artifacts: Optional[np.ndarray] = None
 
 class CircularBuffer:
-    """Thread-safe circular buffer for real-time data"""
-    
     def __init__(self, channels: int, size: int):
-        self.buffer = np.zeros((channels, size))
+        # Pre-allocate numpy arrays for better performance
+        self.buffer = np.zeros((channels, size), dtype=np.float32)  # Use float32 instead of float64
         self.size = size
         self.position = 0
         self.filled = False
         self.lock = Lock()
-        
+    
     def add(self, data: np.ndarray) -> None:
-        """Add new data to buffer"""
+        """Optimized buffer adding"""
         with self.lock:
             n_samples = data.shape[1]
-            
             if n_samples >= self.size:
+                # Fast path for large chunks
                 self.buffer = data[:, -self.size:]
                 self.position = 0
                 self.filled = True
                 return
                 
-            remaining = self.size - self.position
-            if n_samples > remaining:
-                # Split the data
-                first_part = n_samples - remaining
-                self.buffer[:, self.position:] = data[:, :remaining]
-                self.buffer[:, :first_part] = data[:, remaining:]
-                self.position = first_part
-            else:
+            # Use numpy's optimized operations
+            if self.position + n_samples <= self.size:
                 self.buffer[:, self.position:self.position + n_samples] = data
-                self.position = (self.position + n_samples) % self.size
-                
-            self.filled = self.filled or self.position == 0
+                self.position += n_samples
+            else:
+                # Split the write operation
+                first_part = self.size - self.position
+                self.buffer[:, self.position:] = data[:, :first_part]
+                remainder = n_samples - first_part
+                if remainder > 0:
+                    self.buffer[:, :remainder] = data[:, first_part:]
+                self.position = remainder
+            
+            self.filled = self.filled or self.position >= self.size - 1
             
     def get_data(self) -> Optional[np.ndarray]:
         """Retrieve data from buffer"""
@@ -80,8 +81,6 @@ class CircularBuffer:
             self.filled = False
 
 class DataProcessor(QObject):
-    """Processes real-time data streams with signal quality monitoring"""
-    
     processed_data = pyqtSignal(object)  # for processed data
     error_occurred = pyqtSignal(str)     # for error message
     
@@ -92,7 +91,7 @@ class DataProcessor(QObject):
         self.channels = StreamConfig.CHANNELS[data_type]
         
         self.n_channels = len(self.channels)
-        
+
         # State
         self.mutex = QMutex()
         self.processing_enabled = True
@@ -104,6 +103,10 @@ class DataProcessor(QObject):
         
         # Initialize filters
         self.setup_filters()
+
+        # Add minimum chunk size based on filter requirements
+        self.min_chunk_size = 8
+        self.data_accumulator = []
         
     def setup_buffers(self) -> None:
         """Initialize data buffers"""
@@ -143,43 +146,43 @@ class DataProcessor(QObject):
                 )
                 
     def process_data(self, new_data: np.ndarray, timestamp: float) -> None:
-        """Process new data with thread safety"""
         if not self.processing_enabled or new_data is None:
             return
             
         try:
-            with QMutexLocker(self.mutex):
-                # Add to raw buffer
-                self.raw_buffer.add(new_data)
-                
-                # Get complete data for processing
-                data = self.raw_buffer.get_data()
-                if data is None or data.shape[1] < ProcessingConfig.MIN_SAMPLES:
-                    return
-
-                # Apply current filter if needed
-                if self.current_filter != 'off':
+            # Process immediately without mutex lock for better performance
+            data = new_data
+            
+            if self.current_filter != 'off':
+                try:
                     data = self.apply_filter(data)
-                
-                # Create processed data object
-                processed = ProcessedData(
-                    data=data,
-                    timestamp=timestamp
-                )
-                
-                # Emit processed data
-                self.processed_data.emit(processed)
-
+                except ValueError:
+                    pass  # Skip filtering if chunk too small
+            
+            # Emit processed data immediately
+            processed = ProcessedData(
+                data=data,
+                timestamp=timestamp
+            )
+            
+            self.processed_data.emit(processed)
+            
         except Exception as e:
-            logging.error(f"Error processing data: {str(e)}", exc_info=True)
+            logging.error(f"Error processing data: {str(e)}")
             self.error_occurred.emit(str(e))
             
     def apply_filter(self, data: np.ndarray) -> np.ndarray:
-        """Apply current filter to data"""
+        """Apply current filter to data with size check"""
         if self.current_filter not in self.filters:
             return data
             
+        # Check if data chunk is large enough
         filter_coeffs = self.filters[self.current_filter]
+        pad_len = len(filter_coeffs[0]) - 1
+        
+        if data.shape[1] <= pad_len:
+            return data  # Return unfiltered data if chunk too small
+            
         return FilterUtils.apply_filter_with_mirror(
             data,
             filter_coeffs[0],

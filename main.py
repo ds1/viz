@@ -4,16 +4,17 @@ import logging
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import Qt, QThread
 
-# Configure logging first
+# Configure Qt attributes before creating QApplication
+QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+QApplication.setAttribute(Qt.AA_UseDesktopOpenGL, True)
+
+# Configure logging
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
-
-# Set High DPI attributes before any Qt instantiation
-QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
-QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
 
 # Import after Qt setup
 from src.constants import DataType, ProcessingConfig
@@ -24,6 +25,14 @@ from src.data.data_processor import DataProcessor
 class Application(QApplication):
     def __init__(self, argv):
         super().__init__(argv)
+
+        # Set Qt attributes for better performance
+        self.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+        self.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+
+        # Use OpenGL for rendering if available
+        if hasattr(Qt, 'AA_UseDesktopOpenGL'):
+            self.setAttribute(Qt.AA_UseDesktopOpenGL)
         
         # Create processing threads
         self.receiver_thread = QThread()

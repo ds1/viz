@@ -159,10 +159,14 @@ class Visualizer(QWidget):
         self.setupUi()
         self.setupPlots()
         
-        # Initialize update timer
+        # More frequent updates
         self.update_timer = QTimer()
         self.update_timer.timeout.connect(self.updatePlots)
-        self.update_timer.start(DisplayConfig.MINIMUM_REFRESH_INTERVAL)
+        self.update_timer.start(16)  # ~60 FPS
+
+        # Pre-allocate arrays
+        self._cached_data = None
+        self._cached_shape = None
 
     def setupUi(self):
         """Create and configure UI layout"""
@@ -214,29 +218,44 @@ class Visualizer(QWidget):
             self.time_data = np.linspace(
                 -DisplayConfig.DEFAULT_TIME_WINDOW, 
                 0, 
-                n_samples
+                n_samples,
+                dtype=np.float32
             )
             
-            # Trigger plot update
+            # Immediately trigger plot update
             self.updatePlots()
             
         except Exception as e:
-            logging.error(f"Error updating visualizer data: {e}", exc_info=True)
+            logging.error(f"Error updating visualizer data: {e}")
             
     def updatePlots(self):
-        """Update all plot visualizations"""
+        """Optimized plot updates"""
         if self.data_buffer is None or self.time_data is None:
             return
             
         try:
+            # Only update if data shape changed or first update
+            current_shape = self.data_buffer.shape
+            if self._cached_shape != current_shape:
+                self._cached_shape = current_shape
+                self.time_data = np.linspace(
+                    -DisplayConfig.DEFAULT_TIME_WINDOW,
+                    0,
+                    current_shape[1],
+                    dtype=np.float32
+                )
+            
+            # Update all plots in one go
             for i, plot in enumerate(self.plots):
                 if i < len(self.data_buffer):
                     plot.curve.setData(
-                        x=self.time_data, 
-                        y=self.data_buffer[i]
+                        x=self.time_data,
+                        y=self.data_buffer[i],
+                        connect='finite'  # Only connect non-NaN points
                     )
+                    
         except Exception as e:
-            logging.error(f"Error updating plots: {e}", exc_info=True)
+            logging.error(f"Error updating plots: {e}")
                 
     def wheelEvent(self, event):
         """Handle synchronized vertical scaling"""

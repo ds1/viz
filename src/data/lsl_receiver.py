@@ -86,18 +86,18 @@ class LSLReceiver(QObject):
     data_ready = pyqtSignal(object, object)  # for numpy arrays
     status_changed = pyqtSignal(object)         # for StreamStatus
     stream_info_updated = pyqtSignal(object) # for stream info
-    error_occurred = pyqtSignal(str)         # for error message
-    quality_updated = pyqtSignal(object)     # for quality dict
+    error_occurred = pyqtSignal(str)         # for error message.
     
     def __init__(self, stream_type: str, buffer_size: Optional[int] = None,
                  auto_reconnect: bool = True):
         super().__init__()
         self.stream_type = stream_type  # Store as string
+        
         # Convert to enum for config lookups
         data_type = DataType(stream_type)
         self.required_channels = len(StreamConfig.CHANNELS[data_type])
         self.sampling_rate = StreamConfig.SAMPLING_RATES[data_type]
-        self.buffer_size = buffer_size or ProcessingConfig.BUFFER_SIZES[data_type]
+        self.buffer_size = buffer_size
         self.auto_reconnect = auto_reconnect
         
         # State
@@ -115,14 +115,13 @@ class LSLReceiver(QObject):
         self.max_reconnect_attempts = 5
         self.reconnect_interval = 2000  # ms
         self.current_reconnect_attempt = 0
-        
-        # Quality monitoring
-        self.quality_check_interval = 1000  # ms
-        self.quality_threshold = ProcessingConfig.QUALITY_THRESHOLDS['fair']
-        self.last_quality_check = local_clock()
-        
+            
         # Initialize timers
         self.setup_timers()
+
+        # Increase minimum chunk size
+        self.min_chunk_size = 8
+        self.max_chunklen = 16
     
     def set_stream_type(self, stream_type: Union[str, DataType]):
         """Update stream type"""
@@ -205,20 +204,23 @@ class LSLReceiver(QObject):
                 self._start_reconnection()
                 
     def receive_data(self) -> None:
-        """Receive data from stream"""
+        """Receive data from stream with minimum chunk size"""
         while self.connected and self.inlet:
             try:
                 # Pull chunk of samples
                 samples, timestamps = self.inlet.pull_chunk(
                     timeout=0.0,
-                    max_samples=self.buffer_size // 4
+                    max_samples=self.max_chunklen
                 )
                 
                 if samples:
+                    if len(samples) < self.min_chunk_size:
+                        continue  # Skip small chunks
+                        
                     # Convert to numpy arrays
-                    samples = np.array(samples).T # Important: transpose to get [channels, samples]
+                    samples = np.array(samples, dtype=np.float32).T
                     timestamps = np.array(timestamps)
-
+                    
                     # Emit data immediately
                     self.data_ready.emit(samples, timestamps)
                     
@@ -229,12 +231,6 @@ class LSLReceiver(QObject):
                     
             except TimeoutError:
                 continue
-                
-            except Exception as e:
-                logging.error(f"Data receiving error: {str(e)}")
-                self.error_occurred.emit(str(e))
-                self._handle_connection_loss()
-                break
                 
     def _validate_stream(self, stream_info) -> bool:
         """Validate stream parameters"""
