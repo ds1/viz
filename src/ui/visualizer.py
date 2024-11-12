@@ -52,21 +52,26 @@ class ChannelPlot(pg.PlotWidget):
         self.setupPlot()
         
     def setupPlot(self):
-        """Configure plot styling and behavior"""
-        # Basic setup
+        """Optimized plot configuration"""
         self.setBackground('transparent')
         self.setMenuEnabled(False)
         self.hideAxis('left')
         self.hideAxis('bottom')
         
-        # Configure view box
+        # Optimize viewbox
         view = self.getViewBox()
         view.setBackgroundColor('transparent')
-        view.setYRange(self.initial_y_range[0], self.initial_y_range[1], padding=0)
         view.setMouseEnabled(x=False, y=False)
+        view.setAspectLocked(False)
+        view.autoRange(padding=0)
         
-        # Create plot line with antialiasing
-        self.curve = self.plot(pen=self.createPen())
+        # Create optimized curve
+        self.curve = self.plot(
+            pen=self.createPen(),
+            skipFiniteCheck=True,
+            antialias=True,
+            downsample=2  # Adjust based on performance
+        )
         
     def createPen(self) -> pg.mkPen:
         """Create styled pen for plot line"""
@@ -158,11 +163,6 @@ class Visualizer(QWidget):
         # Create UI elements
         self.setupUi()
         self.setupPlots()
-        
-        # More frequent updates
-        self.update_timer = QTimer()
-        self.update_timer.timeout.connect(self.updatePlots)
-        self.update_timer.start(16)  # ~60 FPS
 
         # Pre-allocate arrays
         self._cached_data = None
@@ -209,24 +209,34 @@ class Visualizer(QWidget):
             self.channel_layout.addLayout(row)
                     
     def updateData(self, processed: ProcessedData):
-        """Handle new processed data"""
+        """Handle new processed data with direct updates"""
         try:
-            self.data_buffer = processed.data
+            if processed is None:
+                logging.warning("Received None processed data")
+                return
             
-            # Update time points
-            n_samples = processed.data.shape[1]
+            logging.debug(f"Updating visualizer with data shape: {processed.data.shape}")
+
+            self.data_buffer = processed.data
             self.time_data = np.linspace(
                 -DisplayConfig.DEFAULT_TIME_WINDOW, 
                 0, 
-                n_samples,
-                dtype=np.float32
+                processed.data.shape[1]
             )
             
-            # Immediately trigger plot update
-            self.updatePlots()
+            # Direct update without timer
+            for i, plot in enumerate(self.plots):
+                if i < len(self.data_buffer):
+                    plot.curve.setData(
+                        x=self.time_data, 
+                        y=self.data_buffer[i]
+                    )
+                    
+            # Request single frame update
+            self.update()
             
         except Exception as e:
-            logging.error(f"Error updating visualizer data: {e}")
+            logging.error(f"Error updating visualizer data: {e}", exc_info=True)
             
     def updatePlots(self):
         """Optimized plot updates"""

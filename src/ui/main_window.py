@@ -7,9 +7,10 @@ from ..ui.visualizer import Visualizer
 from ..ui.status_bar import StatusBar
 from src.ui.timeline import Timeline
 from ..ui.design_system import DesignSystem
-from ..data.lsl_receiver import LSLReceiver, StreamStatus
-from ..data.data_processor import DataProcessor, DataProcessorThread
-from ..constants import DataType, DisplayConfig, ProcessingConfig
+from ..data.lsl_receiver import LSLReceiver
+from ..data.data_processor import DataProcessor
+from ..data.processor_thread import DataProcessorThread  # Updated import
+from ..constants import DataType, DisplayConfig, ProcessingConfig, StreamStatus
 
 class ControlBar(QWidget):
     """Control bar with data type, filter, scale, and window controls"""

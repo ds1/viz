@@ -7,80 +7,24 @@ from dataclasses import dataclass
 from threading import Lock
 
 from src.data.utils import (
-    FilterUtils, SpectralAnalysis, ArtifactDetection,
-    SignalQualityMetrics, HeartRateAnalysis, SignalQuality
+    FilterUtils, SpectralAnalysis, ArtifactDetection, HeartRateAnalysis
 )
 from src.constants import (
     DataType, ProcessingConfig, StreamConfig,
     DisplayConfig
 )
 # Add if you need specific types:
-from src.custom_types import ProcessedSignal, FilterParameters, QualityMetrics
+from src.custom_types import ProcessedSignal, FilterParameters
 
 @dataclass
 class ProcessedData:
     """Container for processed data and metrics"""
     data: np.ndarray
     timestamp: float
-    # heart_rate: Optional[float] = None
-    # heart_rate_confidence: Optional[float] = None
-    # artifacts: Optional[np.ndarray] = None
-
-class CircularBuffer:
-    def __init__(self, channels: int, size: int):
-        # Pre-allocate numpy arrays for better performance
-        self.buffer = np.zeros((channels, size), dtype=np.float32)  # Use float32 instead of float64
-        self.size = size
-        self.position = 0
-        self.filled = False
-        self.lock = Lock()
-    
-    def add(self, data: np.ndarray) -> None:
-        """Optimized buffer adding"""
-        with self.lock:
-            n_samples = data.shape[1]
-            if n_samples >= self.size:
-                # Fast path for large chunks
-                self.buffer = data[:, -self.size:]
-                self.position = 0
-                self.filled = True
-                return
-                
-            # Use numpy's optimized operations
-            if self.position + n_samples <= self.size:
-                self.buffer[:, self.position:self.position + n_samples] = data
-                self.position += n_samples
-            else:
-                # Split the write operation
-                first_part = self.size - self.position
-                self.buffer[:, self.position:] = data[:, :first_part]
-                remainder = n_samples - first_part
-                if remainder > 0:
-                    self.buffer[:, :remainder] = data[:, first_part:]
-                self.position = remainder
-            
-            self.filled = self.filled or self.position >= self.size - 1
-            
-    def get_data(self) -> Optional[np.ndarray]:
-        """Retrieve data from buffer"""
-        with self.lock:
-            if not self.filled and self.position == 0:
-                return None
-            if self.position == 0 or not self.filled:
-                return self.buffer[:, :self.position]
-            return np.concatenate((
-                self.buffer[:, self.position:],
-                self.buffer[:, :self.position]
-            ), axis=1)
-            
-    def clear(self) -> None:
-        """Clear buffer"""
-        with self.lock:
-            self.buffer.fill(0)
-            self.position = 0
-            self.filled = False
 
 class DataProcessor(QObject):
+    """Processes real-time data streams with signal quality monitoring"""
+    
     processed_data = pyqtSignal(object)  # for processed data
     error_occurred = pyqtSignal(str)     # for error message
     
@@ -91,42 +35,81 @@ class DataProcessor(QObject):
         self.channels = StreamConfig.CHANNELS[data_type]
         
         self.n_channels = len(self.channels)
-
+        
         # State
         self.mutex = QMutex()
         self.processing_enabled = True
         self.current_filter = 'default'
         self.current_quality = {}
         
-        # Initialize buffers
-        self.setup_buffers()
+        # Buffer initialization
+        buffer_size = ProcessingConfig.BUFFER_SIZES[self.data_type]
+        self.raw_buffer = np.zeros((self.n_channels, buffer_size))
+        self.buffer_position = 0
+        self.buffer_full = False
         
         # Initialize filters
         self.setup_filters()
+        
+    def process_data(self, new_data: np.ndarray, timestamp: float) -> Optional[ProcessedData]:
+        """Process new data and return processed result"""
+        if not self.processing_enabled or new_data is None:
+            return None
+            
+        try:
+            with QMutexLocker(self.mutex):
+                logging.debug(f"Processing data shape: {new_data.shape}")
+                
+                # Add to buffer
+                self.raw_buffer[:, self.buffer_position:self.buffer_position + new_data.shape[1]] = new_data
+                self.buffer_position = (self.buffer_position + new_data.shape[1]) % self.raw_buffer.shape[1]
+                
+                # Process data
+                if self.current_filter != 'off':
+                    try:
+                        data = self.apply_filter(new_data)
+                        logging.debug("Filter applied successfully")
+                    except ValueError as e:
+                        logging.warning(f"Filter error: {str(e)}, using unfiltered data")
+                        data = new_data
+                else:
+                    data = new_data
+                
+                processed = ProcessedData(
+                    data=data,
+                    timestamp=timestamp
+                )
+                
+                logging.debug(f"Processed data shape: {processed.data.shape}")
+                return processed
 
-        # Add minimum chunk size based on filter requirements
-        self.min_chunk_size = 8
-        self.data_accumulator = []
-        
-    def setup_buffers(self) -> None:
-        """Initialize data buffers"""
-        buffer_size = ProcessingConfig.BUFFER_SIZES[self.data_type]
-        
-        # Main data buffer
-        self.raw_buffer = CircularBuffer(self.n_channels, buffer_size)
-        
-        # Quality monitoring buffers
-        quality_size = int(ProcessingConfig.QUALITY_WINDOW * self.sampling_rate)
-        self.quality_buffers = {
-            name: CircularBuffer(1, quality_size)
-            for name in self.channels
-        }
-        
-        # Heart rate buffer for PPG
-        if self.data_type == DataType.PPG:
-            hr_buffer_size = int(4 * self.sampling_rate)  # 4 seconds
-            self.hr_buffer = CircularBuffer(1, hr_buffer_size)
-        
+        except Exception as e:
+            logging.error(f"Error processing data: {str(e)}", exc_info=True)
+            raise
+            
+    def apply_filter(self, data: np.ndarray) -> np.ndarray:
+        """Apply current filter to data"""
+        if self.current_filter not in self.filters:
+            return data
+            
+        try:
+            filter_coeffs = self.filters[self.current_filter]
+            pad_length = max(3 * max(len(filter_coeffs[0]), len(filter_coeffs[1])), 32)
+            
+            if data.shape[1] <= pad_length:
+                return data
+                
+            return FilterUtils.apply_filter_with_mirror(
+                data,
+                filter_coeffs[0],
+                filter_coeffs[1],
+                pad_length=pad_length
+            )
+            
+        except ValueError as e:
+            logging.warning(f"Filtering error: {str(e)}")
+            return data
+            
     def setup_filters(self) -> None:
         """Initialize filters based on configuration"""
         self.filters = {}
@@ -145,90 +128,6 @@ class DataProcessor(QObject):
                     config['lowpass']
                 )
                 
-    def process_data(self, new_data: np.ndarray, timestamp: float) -> None:
-        if not self.processing_enabled or new_data is None:
-            return
-            
-        try:
-            # Process immediately without mutex lock for better performance
-            data = new_data
-            
-            if self.current_filter != 'off':
-                try:
-                    data = self.apply_filter(data)
-                except ValueError:
-                    pass  # Skip filtering if chunk too small
-            
-            # Emit processed data immediately
-            processed = ProcessedData(
-                data=data,
-                timestamp=timestamp
-            )
-            
-            self.processed_data.emit(processed)
-            
-        except Exception as e:
-            logging.error(f"Error processing data: {str(e)}")
-            self.error_occurred.emit(str(e))
-            
-    def apply_filter(self, data: np.ndarray) -> np.ndarray:
-        """Apply current filter to data with size check"""
-        if self.current_filter not in self.filters:
-            return data
-            
-        # Check if data chunk is large enough
-        filter_coeffs = self.filters[self.current_filter]
-        pad_len = len(filter_coeffs[0]) - 1
-        
-        if data.shape[1] <= pad_len:
-            return data  # Return unfiltered data if chunk too small
-            
-        return FilterUtils.apply_filter_with_mirror(
-            data,
-            filter_coeffs[0],
-            filter_coeffs[1]
-        )
-        
-    def update_quality_metrics(self, data: np.ndarray) -> None:
-        """Update signal quality metrics"""
-        for i, (name, config) in enumerate(self.channels.items()):
-            channel_data = data[i]
-            
-            # Calculate quality metrics
-            quality = SignalQualityMetrics.calculate_signal_quality(
-                channel_data,
-                self.sampling_rate,
-                self.data_type
-            )
-            
-            self.current_quality[name] = quality
-            
-    def detect_artifacts(self, data: np.ndarray) -> np.ndarray:
-        """Detect artifacts in all channels"""
-        artifacts = np.zeros((self.n_channels, data.shape[1]), dtype=bool)
-        
-        for i in range(self.n_channels):
-            artifacts[i], _ = ArtifactDetection.detect_artifacts(
-                data[i],
-                self.sampling_rate
-            )
-            
-        return artifacts
-        
-    def process_heart_rate(self, data: np.ndarray) -> Tuple[float, float]:
-        """Calculate heart rate from PPG data"""
-        if self.data_type != DataType.PPG:
-            return None, None
-            
-        # Use IR channel for heart rate
-        ir_index = 1  # Ambient, IR, Red
-        ir_data = data[ir_index]
-        
-        return HeartRateAnalysis.calculate_heart_rate(
-            ir_data,
-            self.sampling_rate
-        )
-        
     def set_filter(self, filter_name: str) -> None:
         """Change current filter"""
         if filter_name.lower() == 'off':
@@ -243,8 +142,13 @@ class DataProcessor(QObject):
         self.channels = StreamConfig.CHANNELS[data_type]
         self.n_channels = len(self.channels)
         
-        # Reinitialize
-        self.setup_buffers()
+        # Reinitialize buffer
+        buffer_size = ProcessingConfig.BUFFER_SIZES[data_type]
+        self.raw_buffer = np.zeros((self.n_channels, buffer_size))
+        self.buffer_position = 0
+        self.buffer_full = False
+        
+        # Reinitialize filters
         self.setup_filters()
         self.current_filter = 'default'
         self.current_quality = {}
@@ -255,45 +159,6 @@ class DataProcessor(QObject):
         
     def clear_buffers(self) -> None:
         """Clear all data buffers"""
-        self.raw_buffer.clear()
-        for buffer in self.quality_buffers.values():
-            buffer.clear()
-            
-        if hasattr(self, 'hr_buffer'):
-            self.hr_buffer.clear()
-
-class DataProcessorThread(QThread):
-    """Thread for running data processing"""
-    
-    # Signals
-    processed_data = pyqtSignal(object)  # For processed data
-    error_occurred = pyqtSignal(str)
-    
-    def __init__(self, processor, parent=None):
-        super().__init__(parent)
-        self.processor = processor
-        self.running = False
-        
-    def run(self):
-        """Thread's main loop"""
-        self.running = True
-        while self.running:
-            try:
-                # Process data if available
-                if hasattr(self.processor, 'process_data'):
-                    result = self.processor.process_data()
-                    if result is not None:
-                        print(f"Sending processed data: {result.data.shape}")
-                        self.processed_data.emit(result)
-                
-                # Sleep briefly to prevent CPU overuse
-                self.msleep(10)
-                
-            except Exception as e:
-                logging.error(f"Processing error: {str(e)}")
-                self.error_occurred.emit(str(e))
-                
-    def stop(self):
-        """Stop the processing thread"""
-        self.running = False
-        self.wait()
+        self.raw_buffer.fill(0)
+        self.buffer_position = 0
+        self.buffer_full = False

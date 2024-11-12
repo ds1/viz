@@ -72,12 +72,18 @@ class StreamConfig:
 class ProcessingConfig:
     """Signal processing configurations"""
     
-    # Buffer sizes in samples
+    MIN_SAMPLES = 64       # minimum samples for processing
+
+    # Filter parameters
+    FILTER_PAD_MULTIPLIER = 3
+    MIN_FILTER_SAMPLES = 32
+
+    # Buffer sizes (in samples)
     BUFFER_SIZES: Dict[DataType, int] = {
-        DataType.EEG: 1024,  # 4 seconds at 256 Hz
-        DataType.PPG: 256,   # 4 seconds at 64 Hz
-        DataType.ACCELEROMETER: 208,  # 4 seconds at 52 Hz
-        DataType.GYROSCOPE: 208       # 4 seconds at 52 Hz
+        DataType.EEG: 1024,  # Increased from original
+        DataType.PPG: 512,   
+        DataType.ACCELEROMETER: 256,
+        DataType.GYROSCOPE: 256
     }
     
     # Filter configurations
@@ -111,6 +117,8 @@ class ProcessingConfig:
         DataType.ACCELEROMETER: ['Off', 'Default', 'Movement'],
         DataType.GYROSCOPE: ['Off', 'Default', 'Movement']
     }
+
+
     
     # Quality thresholds
     QUALITY_THRESHOLDS: Dict[str, float] = {
@@ -123,7 +131,7 @@ class ProcessingConfig:
     # Processing parameters
     ARTIFACT_WINDOW = 0.5  # seconds
     QUALITY_WINDOW = 1.0   # seconds
-    MIN_SAMPLES = 32       # minimum samples for processing
+
 
 class DisplayConfig:
     """Visualization configurations"""

@@ -50,26 +50,25 @@ class FilterUtils:
         return signal.butter(order, normal_cutoff, btype='low')
 
     @staticmethod
-    def apply_filter_with_mirror(
-        data: np.ndarray,
-        b: np.ndarray,
-        a: np.ndarray,
-        axis: int = -1
-    ) -> np.ndarray:
-        """Apply filter with signal mirroring to reduce edge effects"""
-        # Mirror the signal
-        mirror_len = len(data) // 2
-        mirrored = np.concatenate([
-            data[..., :mirror_len][..., ::-1],
-            data,
-            data[..., -mirror_len:][..., ::-1]
-        ], axis=axis)
-        
-        # Apply filter
-        filtered = signal.filtfilt(b, a, mirrored, axis=axis)
-        
-        # Return central portion
-        return filtered[..., mirror_len:-mirror_len]
+    def apply_filter_with_mirror(data: np.ndarray, b: np.ndarray, a: np.ndarray, pad_length: int = 32) -> np.ndarray:
+        """Apply filter with proper padding and mirroring"""
+        try:
+            # Ensure enough data for padding
+            if data.shape[1] <= pad_length:
+                return data
+                
+            # Create padded data
+            padded = np.pad(data, ((0, 0), (pad_length, pad_length)), mode='reflect')
+            
+            # Apply filter
+            filtered = signal.filtfilt(b, a, padded, axis=1, padlen=pad_length)
+            
+            # Return only the valid portion
+            return filtered[:, pad_length:-pad_length]
+            
+        except ValueError as e:
+            logging.warning(f"Filter padding error: {str(e)}")
+            return data
 
 class SpectralAnalysis:
     """Utilities for spectral analysis"""
