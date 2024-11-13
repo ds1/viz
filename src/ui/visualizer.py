@@ -52,27 +52,40 @@ class ChannelPlot(pg.PlotWidget):
         self.setupPlot()
         
     def setupPlot(self):
-        """Optimized plot configuration"""
+        """Configure plot styling and behavior"""
+        # Basic setup
         self.setBackground('transparent')
         self.setMenuEnabled(False)
         self.hideAxis('left')
         self.hideAxis('bottom')
         
-        # Optimize viewbox
+        # Configure view box
         view = self.getViewBox()
         view.setBackgroundColor('transparent')
-        view.setMouseEnabled(x=False, y=False)
-        view.setAspectLocked(False)
-        view.autoRange(padding=0)
+        view.enableAutoRange(axis='y')  # Enable auto-range by default
+        view.setMouseEnabled(x=False, y=True)  # Allow vertical scaling
         
-        # Create optimized curve
-        self.curve = self.plot(
-            pen=self.createPen(),
-            skipFiniteCheck=True,
-            antialias=True,
-            downsample=2  # Adjust based on performance
-        )
+        # Set default ranges
+        view.setYRange(self.initial_y_range[0], self.initial_y_range[1], padding=0.1)
         
+        # Enable auto-range by default
+        view.enableAutoRange()
+        
+        # Create plot line with antialiasing
+        self.curve = self.plot(pen=self.createPen())
+        
+        # Configure auto-range
+        self.getPlotItem().setAutoVisible(y=True)
+        self.getPlotItem().setDownsampling(mode='peak')
+        self.getPlotItem().setClipToView(True)
+        
+        # Add grid
+        self.showGrid(x=True, y=True, alpha=0.3)
+        
+        # Set better default viewing parameters
+        self.setAutoPan(x=True)
+        self.setAutoVisible(y=True)
+
     def createPen(self) -> pg.mkPen:
         """Create styled pen for plot line"""
         return pg.mkPen({
@@ -80,6 +93,15 @@ class ChannelPlot(pg.PlotWidget):
             'width': DesignSystem.PLOT_CONFIG['line_width'],
             'cosmetic': True
         })
+
+    def setAutoPan(self, x=True):
+        """Enable auto-panning"""
+        view = self.getViewBox()
+        view.setAutoPan(x=x)
+
+    def setAutoVisible(self, y=True):
+        """Enable auto-visible for y axis"""
+        self.getPlotItem().setAutoVisible(y=y)
         
     def setMonochrome(self, enabled: bool):
         """Toggle between monochrome and color mode"""
@@ -209,14 +231,12 @@ class Visualizer(QWidget):
             self.channel_layout.addLayout(row)
                     
     def updateData(self, processed: ProcessedData):
-        """Handle new processed data with direct updates"""
+        """Handle new processed data"""
         try:
             if processed is None:
                 logging.warning("Received None processed data")
                 return
-            
-            logging.debug(f"Updating visualizer with data shape: {processed.data.shape}")
-
+                
             self.data_buffer = processed.data
             self.time_data = np.linspace(
                 -DisplayConfig.DEFAULT_TIME_WINDOW, 
@@ -224,7 +244,7 @@ class Visualizer(QWidget):
                 processed.data.shape[1]
             )
             
-            # Direct update without timer
+            # Direct update with auto-range
             for i, plot in enumerate(self.plots):
                 if i < len(self.data_buffer):
                     plot.curve.setData(
@@ -232,11 +252,14 @@ class Visualizer(QWidget):
                         y=self.data_buffer[i]
                     )
                     
-            # Request single frame update
+                    # Auto-range on update if enabled
+                    if i == 0:  # Only need to do this once
+                        plot.getViewBox().enableAutoRange(axis='y')
+            
             self.update()
             
         except Exception as e:
-            logging.error(f"Error updating visualizer data: {e}", exc_info=True)
+            logging.error(f"Error updating visualizer: {str(e)}", exc_info=True)
             
     def updatePlots(self):
         """Optimized plot updates"""

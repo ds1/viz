@@ -137,7 +137,7 @@ class DisplayConfig:
     """Visualization configurations"""
     
     # Time windows in seconds
-    TIME_WINDOWS = [2, 4, 8]
+    TIME_WINDOWS = [2, 4, 8, 16]
     DEFAULT_TIME_WINDOW = 4
     
     # Vertical scale factors
@@ -147,24 +147,25 @@ class DisplayConfig:
     MAX_SCALE = 10.0
     
     # Display update rate
-    DISPLAY_REFRESH_RATE = 60  # Hz
+    DISPLAY_REFRESH_RATE = 120  # Hz
     MINIMUM_REFRESH_INTERVAL = 1000 // DISPLAY_REFRESH_RATE  # ms
     
     # Grid configuration
     MAJOR_GRID_INTERVAL = 1.0  # seconds
     MINOR_GRID_INTERVAL = 0.2  # seconds
     
+    # Default view ranges
+    DEFAULT_Y_PADDING = 0.1  # 10% padding
+    DEFAULT_Y_RANGES = {
+        'EEG': (-100, 100),      # microvolts
+        'PPG': (-1000, 1000),    # arbitrary units
+        'ACCEL': (-2, 2),        # g
+        'GYRO': (-250, 250)      # degrees/second
+    }
+    
     # Animation
     SMOOTH_SCROLL = True
     SCROLL_FACTOR = 0.95  # For smooth scrolling
-    
-    # Quality visualization
-    QUALITY_COLORS = {
-        'excellent': '#4CAF50',
-        'good': '#8BC34A',
-        'fair': '#FFC107',
-        'poor': '#F44336'
-    }
 
 class ErrorMessages:
     """Standard error messages"""
